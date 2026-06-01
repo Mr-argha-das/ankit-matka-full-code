@@ -41,6 +41,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://game.natraj777.com",
+        "https://api.natraj777.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
