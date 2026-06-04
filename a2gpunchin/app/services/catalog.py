@@ -1,0 +1,136 @@
+from app.models.branch import Branch
+from app.models.company import Company
+from app.models.department import Department
+from app.models.employee import Employee
+from app.models.rbac import Permission, Role
+from app.models.shift import Shift
+from app.models.subscription import Subscription
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.repositories.base import BaseRepository
+from app.core.security import hash_password
+from app.services.base import BaseService
+
+
+COMPANY_ADMIN_PERMISSIONS = [
+    "branches:create", "branches:read", "branches:update", "branches:delete",
+    "departments:create", "departments:read", "departments:update", "departments:delete",
+    "employees:create", "employees:read", "employees:update", "employees:delete",
+    "shifts:create", "shifts:read", "shifts:update", "shifts:delete",
+    "attendance:create", "attendance:read", "attendance:update", "attendance:delete",
+    "leaves:create", "leaves:read", "leaves:update", "leaves:delete", "leaves:approve",
+    "reports:read",
+]
+
+
+class CompanyService(BaseService):
+    search_fields = ["company_name", "company_code", "email"]
+
+    def __init__(self):
+        super().__init__(BaseRepository(Company))
+
+    def create(self, data: dict):
+        admin_first_name = data.pop("admin_first_name", "Company")
+        admin_last_name = data.pop("admin_last_name", "Admin")
+        admin_email = data.pop("admin_email", None) or data["email"]
+        admin_phone = data.pop("admin_phone", None)
+        admin_password = data.pop("admin_password", "CompanyAdmin123!")
+
+        tenant = Tenant(
+            tenant_id=data["company_code"].lower(),
+            name=data["company_name"],
+            domain=f"{data['company_code'].lower()}.local",
+            owner_email=admin_email,
+        ).save()
+        company = Company(tenant_id=str(tenant.id), **data).save()
+        company.company_id = str(company.id)
+        company.save()
+
+        permissions = []
+        for code in COMPANY_ADMIN_PERMISSIONS:
+            permission = Permission.objects(code=code).first() or Permission(
+                tenant_id=str(tenant.id),
+                company_id=str(company.id),
+                code=code,
+                name=code.replace(":", " ").title(),
+                module=code.split(":")[0],
+            ).save()
+            permissions.append(permission)
+
+        role = Role(
+            tenant_id=str(tenant.id),
+            company_id=str(company.id),
+            name="Company Admin",
+            slug=f"company-admin-{data['company_code'].lower()}",
+            permissions=permissions,
+        ).save()
+        User(
+            tenant_id=str(tenant.id),
+            company_id=str(company.id),
+            email=admin_email.lower(),
+            password_hash=hash_password(admin_password),
+            first_name=admin_first_name,
+            last_name=admin_last_name,
+            phone=admin_phone,
+            roles=[role],
+            is_email_verified=True,
+        ).save()
+        return company
+
+
+class BranchService(BaseService):
+    search_fields = ["branch_name", "branch_code", "address"]
+
+    def __init__(self):
+        super().__init__(BaseRepository(Branch))
+
+
+class DepartmentService(BaseService):
+    search_fields = ["department_name", "department_code", "description"]
+
+    def __init__(self):
+        super().__init__(BaseRepository(Department))
+
+
+class EmployeeService(BaseService):
+    search_fields = ["employee_code", "first_name", "last_name", "email", "phone"]
+
+    def __init__(self):
+        super().__init__(BaseRepository(Employee))
+
+    def list(self, page: int = 1, page_size: int = 20, search: str | None = None, sort: str = "-created_at", **filters):
+        items, total = super().list(page=page, page_size=page_size, search=search, sort=sort, **filters)
+        if not search or total or " " not in search.strip():
+            return items, total
+
+        query = Employee.objects.visible()
+        if filters:
+            query = query.filter(**{key: value for key, value in filters.items() if value not in (None, "")})
+        for part in search.split():
+            query = query.filter(__raw__={"$or": [{"first_name": {"$regex": part, "$options": "i"}}, {"last_name": {"$regex": part, "$options": "i"}}]})
+        total = query.count()
+        return list(query.order_by(sort).skip((page - 1) * page_size).limit(page_size)), total
+
+    def create(self, data: dict):
+        if data.get("face_embedding"):
+            data["face_enrolled"] = True
+        return super().create(data)
+
+    def update(self, object_id: str, data: dict):
+        if data.get("face_embedding"):
+            data["face_enrolled"] = True
+        return super().update(object_id, data)
+
+
+class ShiftService(BaseService):
+    search_fields = ["shift_name", "start_time", "end_time"]
+
+    def __init__(self):
+        super().__init__(BaseRepository(Shift))
+
+
+class SubscriptionService(BaseService):
+    search_fields = ["plan_name", "payment_reference"]
+
+    def __init__(self):
+        super().__init__(BaseRepository(Subscription))

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2 class="h5">Attendance Exports</h2>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=csv">CSV</a>
+    <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=xlsx">Excel</a>
+    <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=pdf">PDF</a>
+  </div>
+</div>
+{% endblock %}

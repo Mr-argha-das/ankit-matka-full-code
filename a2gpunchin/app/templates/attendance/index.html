@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">Live Monitor</span>
+    <h2>Face punch attendance</h2>
+    <p>Records created from the branch kiosk app appear here with shift-rule status.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=xlsx">Export Excel</a>
+</div>
+<div class="panel mb-3">
+  <div class="row g-3 align-items-end">
+    <div class="col-lg-5">
+      <h2 class="h5 mb-1">Kiosk mode is active</h2>
+      <p class="text-muted mb-0">Employees punch from the TL phone using face scan. Manual GPS punch is kept only for admin correction.</p>
+    </div>
+    <div class="col-lg-7">
+      <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+        <a class="btn btn-primary" href="/branches">Open Kiosk Setup</a>
+        <a class="btn btn-outline-primary" href="/reports">Reports</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="panel mb-3">
+  <form class="row g-2 align-items-end table-filter-form" data-target="#attendanceTable">
+    <div class="col-md-2"><label class="form-label">From Date</label><input class="form-control" name="start_date" type="date"></div>
+    <div class="col-md-2"><label class="form-label">To Date</label><input class="form-control" name="end_date" type="date"></div>
+    <div class="col-md-3"><label class="form-label">Employee</label><select class="form-select option-loader" name="employee_id" data-source="/api/employees" data-kind="employee"><option value="">All employees</option></select></div>
+    <div class="col-md-2"><label class="form-label">Branch</label><select class="form-select option-loader" name="branch_id" data-source="/api/branches" data-kind="branch"><option value="">All branches</option></select></div>
+    <div class="col-md-1"><label class="form-label">Status</label><select class="form-select" name="status"><option value="">All</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="pending">Pending</option></select></div>
+    <div class="col-md-2 d-flex gap-2"><button class="btn btn-primary flex-fill">Filter</button><button class="btn btn-outline-secondary flex-fill" type="reset">Clear</button></div>
+  </form>
+</div>
+<div class="panel mb-3">
+  <h2 class="h5">Admin Manual Check-In</h2>
+  <form id="attendanceForm" class="row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label">Employee</label><select class="form-select option-loader" name="employee_id" data-source="/api/employees" data-kind="employee" required><option value="">Select employee</option></select></div>
+    <div class="col-md-4"><label class="form-label">Branch</label><select class="form-select option-loader" name="branch_id" data-source="/api/branches" data-kind="branch" required><option value="">Select branch</option></select></div>
+    <div class="col-md-3"><button class="btn btn-secondary w-100">Manual GPS Check In</button></div>
+  </form>
+</div>
+<table id="attendanceTable" class="table table-striped data-table" data-api="/api/attendance" data-columns="employee,branch,date,check_in_time,check_out_time,status,in_status,out_status,work_minutes">
+  <thead><tr><th>Employee</th><th>Branch</th><th>Date</th><th>In Time</th><th>Out Time</th><th>Status</th><th>In Status</th><th>Out Status</th><th>Work Hours</th></tr></thead>
+</table>
+{% endblock %}

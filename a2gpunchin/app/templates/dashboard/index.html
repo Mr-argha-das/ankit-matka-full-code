@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero-panel">
+  <div>
+    <span class="eyebrow">Branch Kiosk Workflow</span>
+    <h2>Face punch attendance from one TL phone.</h2>
+    <p>Set up branches, assign employees, enroll faces once, and monitor punch-in/out records from this admin panel.</p>
+  </div>
+  <div class="hero-actions">
+    <a class="btn btn-light" href="/branches">Add Branch Kiosk</a>
+    <a class="btn btn-outline-light" href="/employees">Enroll Employees</a>
+  </div>
+</section>
+
+<div class="metric-grid">
+  <div class="metric accent"><span>Today Present</span><strong id="attendanceToday">0</strong><small>Face punch approved</small></div>
+  <div class="metric"><span>Employees</span><strong id="totalEmployees">0</strong><small>Assigned to branches</small></div>
+  <div class="metric"><span>Active Kiosks</span><strong>1</strong><small>Branch PIN enabled</small></div>
+  <div class="metric"><span>Late / Half Day</span><strong>0</strong><small>Shift rule alerts</small></div>
+</div>
+
+<div class="workflow-grid">
+  <div class="panel">
+    <div class="panel-title">
+      <div>
+        <span class="eyebrow">Setup</span>
+        <h3>Launch a branch kiosk</h3>
+      </div>
+      <a href="/branches">Open</a>
+    </div>
+    <div class="steps">
+      <div><span>1</span><strong>Create branch</strong><p>Set branch code, GPS point, radius, and kiosk PIN.</p></div>
+      <div><span>2</span><strong>Create shift rules</strong><p>Define in time, out time, late, half-day, and early logout.</p></div>
+      <div><span>3</span><strong>Add employees</strong><p>Assign branch and shift, then enroll face from the kiosk app.</p></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">
+      <div>
+        <span class="eyebrow">Analytics</span>
+        <h3>Attendance trend</h3>
+      </div>
+      <a href="/attendance">View live</a>
+    </div>
+    <canvas id="attendanceChart" height="150"></canvas>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-lg-7">
+    <div class="panel">
+      <div class="panel-title">
+        <div><span class="eyebrow">Live Desk</span><h3>What TL does daily</h3></div>
+      </div>
+      <div class="kiosk-card">
+        <div class="kiosk-phone">TL<br>Phone</div>
+        <div>
+          <h4>Open Flutter app before office starts</h4>
+          <p>Enter backend URL, branch code, and kiosk PIN. Employees use the same device for face punch-in and punch-out.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="panel">
+      <div class="panel-title">
+        <div><span class="eyebrow">Status</span><h3>Face enrollment</h3></div>
+      </div>
+      <canvas id="revenueChart" height="210"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+renderDashboardCharts();
+</script>
+{% endblock %}
