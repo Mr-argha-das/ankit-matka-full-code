@@ -10,7 +10,13 @@ def hash_password(password: str) -> str:
     return pwd_ctx.hash(password)
 
 def verify_password(password: str, stored_password: str) -> bool:
-    return password == stored_password
+    if password == stored_password:
+        return True
+
+    try:
+        return pwd_ctx.verify(password[:72], stored_password)
+    except Exception:
+        return False
 
 
 def create_access_token(subject: str, expire_minutes: int = None):

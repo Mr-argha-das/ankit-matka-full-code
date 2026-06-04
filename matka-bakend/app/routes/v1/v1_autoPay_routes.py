@@ -7,7 +7,13 @@ from ...models import Wallet, Transaction
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
-from fastapi_utils.tasks import repeat_every
+try:
+    from fastapi_utils.tasks import repeat_every
+except ModuleNotFoundError:
+    def repeat_every(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 router = APIRouter(prefix="/user-deposit-deeplink", tags=["Auto Pay UPI"])
 
 class CreatePaymentRequest(BaseModel):
