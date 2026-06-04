@@ -2,15 +2,6 @@ const resolveApiUrl = () => {
   const configured = import.meta.env.VITE_API_URL;
   if (configured) return configured;
 
-  const { hostname } = window.location;
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return "http://127.0.0.1:8000";
-  }
-
-  if (hostname === "10.0.2.2") {
-    return "http://10.0.2.2:8000";
-  }
-
   return "https://api.natraj777.com";
 };
 
