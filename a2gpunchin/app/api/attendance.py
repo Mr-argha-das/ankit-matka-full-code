@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app.core.dependencies import get_current_user, require_permissions
 from app.models.user import User
-from app.schemas.attendance import AttendanceCheckIn, AttendanceCheckOut, PunchLocation
+from app.schemas.attendance import AttendanceCheckIn, AttendanceCheckOut, AttendanceManualCheckOut, PunchLocation
 from app.services.attendance import AttendanceService
 from app.utils.serializers import document_to_dict
 
@@ -59,7 +59,7 @@ def _attendance_row(item) -> dict:
     if item.attendance_status == "approved" and item.shift_id:
         if item.check_in_time:
             in_status = service._check_in_status(item.shift_id, item.check_in_time)
-        if item.check_out_time:
+        if item.check_out_time and item.check_out_status != "auto_punch_out":
             out_status = service._check_out_status(item.shift_id, item.check_out_time)
     return {
         "id": str(item.id),
@@ -87,6 +87,7 @@ def list_attendance(
     status: str | None = None,
     _=Depends(require_permissions("attendance:read")),
 ):
+    service.auto_punch_out_overdue()
     filters = {}
     if start_date:
         filters["attendance_date__gte"] = start_date
@@ -112,6 +113,13 @@ def check_out(payload: AttendanceCheckOut, _=Depends(require_permissions("attend
     data = payload.model_dump(exclude_none=True)
     attendance_id = data.pop("attendance_id")
     return document_to_dict(service.check_out(attendance_id, data))
+
+
+@router.post("/manual-check-out")
+def manual_check_out(payload: AttendanceManualCheckOut, _=Depends(require_permissions("attendance:update"))):
+    data = payload.model_dump(exclude_none=True)
+    employee_id = data.pop("employee_id")
+    return document_to_dict(service.check_out_employee(employee_id, data))
 
 
 @router.get("/me/today")

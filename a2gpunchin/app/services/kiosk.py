@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 
+from app.core.config import settings
 from app.models.attendance import Attendance
 from app.models.branch import Branch
 from app.models.employee import Employee
@@ -39,10 +40,27 @@ class KioskService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Matched employee has no shift assigned")
         return employee, score
 
+    def _last_punch_at(self, attendance: Attendance | None):
+        if not attendance:
+            return None
+        values = [value for value in [attendance.check_in_time, attendance.check_out_time] if value]
+        return max(values) if values else None
+
+    def _enforce_scan_cooldown(self, attendance: Attendance | None, now) -> None:
+        last_punch_at = self._last_punch_at(attendance)
+        if not last_punch_at:
+            return
+        cooldown_seconds = max(0, getattr(settings, "face_punch_cooldown_seconds", 10))
+        elapsed = (self.attendance_service._aware(now) - self.attendance_service._aware(last_punch_at)).total_seconds()
+        if elapsed < cooldown_seconds:
+            remaining = max(1, int(cooldown_seconds - elapsed))
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Please wait {remaining} seconds before next face punch")
+
     def punch(self, data: dict) -> dict:
         branch = self._branch(data["branch_id"], data["kiosk_pin"])
         employee, score = self._match_employee(branch, data["face_embedding"])
         now = self.attendance_service.utc_now()
+        self.attendance_service.auto_punch_out_overdue(now)
         latitude = data.get("latitude") if data.get("latitude") is not None else branch.latitude
         longitude = data.get("longitude") if data.get("longitude") is not None else branch.longitude
         approved, distance = within_geofence(latitude, longitude, branch.latitude, branch.longitude, branch.allowed_radius)
@@ -50,6 +68,7 @@ class KioskService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Kiosk device is outside branch radius by {distance} meters")
 
         attendance = Attendance.objects(employee_id=employee, attendance_date=self.attendance_service.to_local(now).date(), is_active=True).first()
+        self._enforce_scan_cooldown(attendance, now)
         action = data["action"]
         if action == "auto":
             action = "punch_out" if attendance and attendance.check_in_time and not attendance.check_out_time else "punch_in"

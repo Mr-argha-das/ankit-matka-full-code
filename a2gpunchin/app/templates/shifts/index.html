@@ -1,41 +1,49 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-head">
+<div class="module-head">
   <div>
     <span class="eyebrow">Rules Engine</span>
     <h2>Shift timing rules</h2>
-    <p>Define in time, out time, late marks, half-day threshold, and early logout rules.</p>
+    <p>Define the rules that classify on-time, late, half-day, normal checkout, early logout, and automatic punch-out outcomes.</p>
   </div>
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#shiftModal">Add Shift Rule</button>
 </div>
-<table class="table table-striped data-table" data-api="/api/shifts" data-columns="shift_name,start_time,end_time,grace_time,late_after,half_day_after,early_logout_before">
-  <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Grace</th><th>Late After</th><th>Half Day After</th><th>Early Logout</th></tr></thead>
-</table>
+
+<div class="insight-strip">
+  <div><span>Check-in status</span><strong>Grace, late, half day</strong></div>
+  <div><span>Checkout status</span><strong>Normal, early, or auto</strong></div>
+  <div><span>Assignment</span><strong>Employee profile</strong></div>
+</div>
+
+<section class="panel table-panel">
+  <div class="panel-title">
+    <div><span class="eyebrow">Rules</span><h3>Shift catalog</h3></div>
+  </div>
+  <table class="table table-striped data-table" data-api="/api/shifts" data-columns="shift_name,start_time,end_time,grace_time,late_after,half_day_after,early_logout_before">
+    <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Grace</th><th>Late After</th><th>Half Day After</th><th>Early Logout</th></tr></thead>
+  </table>
+</section>
+
 <div class="modal fade" id="shiftModal" tabindex="-1">
   <div class="modal-dialog">
     <form class="modal-content ajax-form" data-api="/api/shifts">
       <div class="modal-header"><h2 class="modal-title fs-5">Shift Rules</h2></div>
-      <div class="modal-body">
-        <label class="form-label">Shift Name</label>
-        <input class="form-control mb-2" name="shift_name" placeholder="General Shift" required>
-        <label class="form-label">Start Time</label>
-        <input class="form-control mb-2" name="start_time" type="time" value="09:00" required>
-        <label class="form-label">End Time</label>
-        <input class="form-control mb-2" name="end_time" type="time" value="18:00" required>
-        <label class="form-label">Grace Minutes</label>
-        <input class="form-control mb-2" name="grace_time" type="number" value="10" placeholder="Grace minutes">
-        <label class="form-label">Late After Minutes</label>
-        <input class="form-control mb-2" name="late_after" type="number" value="15" placeholder="Late after minutes">
-        <label class="form-label">Half Day After Late Minutes</label>
-        <input class="form-control mb-2" name="half_day_after" type="number" value="240" placeholder="Half day after late minutes">
-        <label class="form-label">Early Logout Before End Minutes</label>
-        <input class="form-control mb-2" name="early_logout_before" type="number" value="30" placeholder="Early logout before end minutes">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="is_night_shift" value="true" id="nightShift">
-          <label class="form-check-label" for="nightShift">Night shift</label>
+      <div class="modal-body row g-3">
+        <div class="col-12"><label class="form-label">Shift Name</label><input class="form-control" name="shift_name" placeholder="General Shift" required></div>
+        <div class="col-md-6"><label class="form-label">Start Time</label><input class="form-control" name="start_time" type="time" value="09:00" required></div>
+        <div class="col-md-6"><label class="form-label">End Time</label><input class="form-control" name="end_time" type="time" value="18:00" required></div>
+        <div class="col-md-6"><label class="form-label">Grace Minutes</label><input class="form-control" name="grace_time" type="number" value="10" placeholder="Grace minutes"></div>
+        <div class="col-md-6"><label class="form-label">Late After Minutes</label><input class="form-control" name="late_after" type="number" value="15" placeholder="Late after minutes"></div>
+        <div class="col-md-6"><label class="form-label">Half Day After Late Minutes</label><input class="form-control" name="half_day_after" type="number" value="240" placeholder="Half day after late minutes"></div>
+        <div class="col-md-6"><label class="form-label">Early Logout Before End Minutes</label><input class="form-control" name="early_logout_before" type="number" value="30" placeholder="Early logout before end minutes"></div>
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_night_shift" value="true" id="nightShift">
+            <label class="form-check-label" for="nightShift">Night shift</label>
+          </div>
         </div>
       </div>
-      <div class="modal-footer"><button class="btn btn-primary">Save</button></div>
+      <div class="modal-footer"><button class="btn btn-primary">Save Shift</button></div>
     </form>
   </div>
 </div>

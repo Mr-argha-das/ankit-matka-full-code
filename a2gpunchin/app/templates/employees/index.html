@@ -1,34 +1,53 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-head">
+<div class="module-head">
   <div>
     <span class="eyebrow">Employee Directory</span>
     <h2>Employees & face enrollment</h2>
-    <p>Add employees, assign branch and shift, then enroll face from the Flutter kiosk app.</p>
+    <p>Add employees, assign branch and shift, and keep face enrollment ready for kiosk-based attendance.</p>
   </div>
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#employeeModal">Add Employee</button>
 </div>
-<form class="row g-2 align-items-end table-filter-form mb-3" data-target="#employeesTable">
-  <div class="col-md-4">
-    <label class="form-label">Search by name</label>
-    <input class="form-control" name="search" placeholder="Type employee name">
+
+<div class="insight-strip">
+  <div><span>Required for punch</span><strong>Branch + shift</strong></div>
+  <div><span>Enrollment</span><strong>Flutter kiosk app</strong></div>
+  <div><span>Privacy</span><strong>Essential fields shown first</strong></div>
+</div>
+
+<section class="panel filter-panel">
+  <div class="panel-title">
+    <div><span class="eyebrow">Filters</span><h3>Search employees</h3></div>
   </div>
-  <div class="col-md-4">
-    <label class="form-label">Branch</label>
-    <select class="form-select option-loader" name="branch_id" data-source="/api/branches" data-kind="branch">
-      <option value="">All branches</option>
-    </select>
+  <form class="row g-2 align-items-end table-filter-form" data-target="#employeesTable">
+    <div class="col-md-5">
+      <label class="form-label">Search</label>
+      <input class="form-control" name="search" placeholder="Name, employee code, email, or phone">
+    </div>
+    <div class="col-md-5">
+      <label class="form-label">Branch</label>
+      <select class="form-select option-loader" name="branch_id" data-source="/api/branches" data-kind="branch">
+        <option value="">All branches</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button class="btn btn-primary flex-fill" type="submit">Filter</button>
+      <button class="btn btn-outline-secondary flex-fill" type="reset">Clear</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-title">
+    <div><span class="eyebrow">People</span><h3>Employee roster</h3></div>
   </div>
-  <div class="col-md-4 d-flex gap-2">
-    <button class="btn btn-primary" type="submit">Filter</button>
-    <button class="btn btn-outline-secondary" type="reset">Clear</button>
-  </div>
-</form>
-<table id="employeesTable" class="table table-striped data-table" data-api="/api/employees" data-page-size="25" data-page-sizes="25,50,75,100" data-columns="prefix,employee_code,staff_role,designation,department,first_name,last_name,father_name,mother_name,email,office_email,gender,date_of_birth,joining_date,phone,emergency_contact_number,marital_status,branch,shift,qualification,work_experience,aadhar_number,pan_number,face,status">
-  <thead><tr><th>Prefix</th><th>Staff ID</th><th>Role</th><th>Designation</th><th>Department</th><th>First Name</th><th>Last Name</th><th>Father Name</th><th>Mother Name</th><th>Email</th><th>Office Email</th><th>Gender</th><th>DOB</th><th>Joining</th><th>Phone</th><th>Emergency</th><th>Marital</th><th>Branch</th><th>Shift</th><th>Qualification</th><th>Experience</th><th>Aadhar</th><th>PAN</th><th>Face</th><th>Status</th></tr></thead>
-</table>
-<div class="modal fade" id="employeeModal" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content ajax-form" data-api="/api/employees"><div class="modal-header"><h2 class="modal-title fs-5">Employee</h2></div><div class="modal-body row g-2">
-  <div class="col-12"><h3 class="h6 text-muted mb-1">Basic Information</h3></div>
+  <table id="employeesTable" class="table table-striped data-table" data-api="/api/employees" data-page-size="25" data-page-sizes="25,50,75,100" data-columns="employee_code,first_name,last_name,staff_role,designation,department,branch,shift,phone,email,face,status">
+    <thead><tr><th>Staff ID</th><th>First Name</th><th>Last Name</th><th>Role</th><th>Designation</th><th>Department</th><th>Branch</th><th>Shift</th><th>Phone</th><th>Email</th><th>Face</th><th>Status</th></tr></thead>
+  </table>
+</section>
+
+<div class="modal fade" id="employeeModal" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content ajax-form" data-api="/api/employees"><div class="modal-header"><h2 class="modal-title fs-5">Employee</h2></div><div class="modal-body row g-3">
+  <div class="col-12"><h3 class="form-section-title">Basic Information</h3></div>
   <div class="col-md-3"><label class="form-label">Prefix</label><input class="form-control" name="prefix" placeholder="Mr / Ms"></div>
   <div class="col-md-3"><label class="form-label">Staff ID</label><input class="form-control" name="employee_code" placeholder="EMP001" required></div>
   <div class="col-md-3"><label class="form-label">Role</label><select class="form-select" name="staff_role"><option value="">Select</option><option value="employee">Employee</option><option value="branch_manager">Branch Manager</option><option value="hr_manager">HR Manager</option><option value="company_admin">Company Admin</option></select></div>
@@ -36,19 +55,21 @@
   <div class="col-md-3"><label class="form-label">Department</label><select class="form-select option-loader" name="department_id" data-source="/api/departments" data-kind="department"><option value="">Select department</option></select></div>
   <div class="col-md-3"><label class="form-label">First Name</label><input class="form-control" name="first_name" placeholder="Rahul" required></div>
   <div class="col-md-3"><label class="form-label">Last Name</label><input class="form-control" name="last_name" placeholder="Sharma" required></div>
-  <div class="col-md-3"><label class="form-label">Father Name</label><input class="form-control" name="father_name" placeholder="Father name"></div>
-  <div class="col-md-3"><label class="form-label">Mother Name</label><input class="form-control" name="mother_name" placeholder="Mother name"></div>
+  <div class="col-md-3"><label class="form-label">Gender</label><select class="form-select" name="gender"><option value="">Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer Not To Say</option></select></div>
+  <div class="col-12"><h3 class="form-section-title">Contact & Assignment</h3></div>
   <div class="col-md-3"><label class="form-label">Email (Login Username)</label><input class="form-control" name="email" type="email" placeholder="employee@company.com" required></div>
   <div class="col-md-3"><label class="form-label">Office Email</label><input class="form-control" name="office_email" type="email" placeholder="office@company.com"></div>
-  <div class="col-md-3"><label class="form-label">Gender</label><select class="form-select" name="gender"><option value="">Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer Not To Say</option></select></div>
-  <div class="col-md-3"><label class="form-label">Date of Birth</label><input class="form-control" name="date_of_birth" type="date"></div>
-  <div class="col-md-3"><label class="form-label">Date of Joining</label><input class="form-control" name="joining_date" type="date"></div>
   <div class="col-md-3"><label class="form-label">Phone</label><input class="form-control" name="phone" placeholder="Phone"></div>
-  <div class="col-md-3"><label class="form-label">Emergency Contact Number</label><input class="form-control" name="emergency_contact_number" placeholder="Emergency phone"></div>
-  <div class="col-md-3"><label class="form-label">Marital Status</label><select class="form-select" name="marital_status"><option value="">Select</option><option value="single">Single</option><option value="married">Married</option><option value="divorced">Divorced</option><option value="widowed">Widowed</option></select></div>
-  <div class="col-md-3"><label class="form-label">Photo</label><input class="form-control" name="profile_photo" placeholder="Photo URL / path"></div>
+  <div class="col-md-3"><label class="form-label">Emergency Contact</label><input class="form-control" name="emergency_contact_number" placeholder="Emergency phone"></div>
   <div class="col-md-3"><label class="form-label">Branch</label><select class="form-select option-loader" name="branch_id" data-source="/api/branches" data-kind="branch"><option value="">Select branch</option></select></div>
   <div class="col-md-3"><label class="form-label">Shift</label><select class="form-select option-loader" name="shift_id" data-source="/api/shifts" data-kind="shift"><option value="">Select shift</option></select></div>
+  <div class="col-md-3"><label class="form-label">Date of Joining</label><input class="form-control" name="joining_date" type="date"></div>
+  <div class="col-md-3"><label class="form-label">Date of Birth</label><input class="form-control" name="date_of_birth" type="date"></div>
+  <div class="col-12"><h3 class="form-section-title">Additional Details</h3></div>
+  <div class="col-md-3"><label class="form-label">Father Name</label><input class="form-control" name="father_name" placeholder="Father name"></div>
+  <div class="col-md-3"><label class="form-label">Mother Name</label><input class="form-control" name="mother_name" placeholder="Mother name"></div>
+  <div class="col-md-3"><label class="form-label">Marital Status</label><select class="form-select" name="marital_status"><option value="">Select</option><option value="single">Single</option><option value="married">Married</option><option value="divorced">Divorced</option><option value="widowed">Widowed</option></select></div>
+  <div class="col-md-3"><label class="form-label">Photo</label><input class="form-control" name="profile_photo" placeholder="Photo URL / path"></div>
   <div class="col-md-6"><label class="form-label">Current Address</label><textarea class="form-control" name="current_address" rows="2"></textarea></div>
   <div class="col-md-6"><label class="form-label">Permanent Address</label><textarea class="form-control" name="permanent_address" rows="2"></textarea></div>
   <div class="col-md-4"><label class="form-label">Qualification</label><textarea class="form-control" name="qualification" rows="2"></textarea></div>
@@ -57,5 +78,5 @@
   <div class="col-md-6"><label class="form-label">Aadhar Number</label><input class="form-control" name="aadhar_number" placeholder="Aadhar number"></div>
   <div class="col-md-6"><label class="form-label">PAN Number</label><input class="form-control" name="pan_number" placeholder="PAN number"></div>
   <div class="col-12"><div class="alert alert-info mb-0">Face enrollment is done from the Flutter kiosk app using this employee code.</div></div>
-</div><div class="modal-footer"><button class="btn btn-primary">Save</button></div></form></div></div>
+</div><div class="modal-footer"><button class="btn btn-primary">Save Employee</button></div></form></div></div>
 {% endblock %}

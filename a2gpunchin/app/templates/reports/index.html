@@ -1,11 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="panel">
-  <h2 class="h5">Attendance Exports</h2>
-  <div class="d-flex flex-wrap gap-2">
-    <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=csv">CSV</a>
-    <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=xlsx">Excel</a>
-    <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=pdf">PDF</a>
+<div class="module-head">
+  <div>
+    <span class="eyebrow">Reporting</span>
+    <h2>Exports & audit-ready reports</h2>
+    <p>Generate attendance exports for payroll, compliance review, and operations follow-up.</p>
   </div>
+  <a class="btn btn-primary" href="/api/reports/attendance?fmt=xlsx">Download Excel</a>
+</div>
+
+<div class="report-grid">
+  <section class="panel report-card">
+    <div>
+      <span class="eyebrow">Attendance</span>
+      <h3>Attendance export</h3>
+      <p>Download the attendance ledger with employees, branches, check-in/out times, status, and work duration.</p>
+    </div>
+    <div class="report-actions">
+      <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=csv">CSV</a>
+      <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=xlsx">Excel</a>
+      <a class="btn btn-outline-primary" href="/api/reports/attendance?fmt=pdf">PDF</a>
+    </div>
+  </section>
+
+  <section class="panel report-card report-card-muted">
+    <div>
+      <span class="eyebrow">Recommended Next</span>
+      <h3>Exception report</h3>
+      <p>Use attendance filters for now to isolate late, rejected, pending, early logout, and auto punch-out records before export.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/attendance">Open Attendance</a>
+  </section>
 </div>
 {% endblock %}

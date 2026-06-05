@@ -82,6 +82,38 @@ class AttendanceService(BaseService):
             return "early_logout"
         return "normal"
 
+    def _auto_punch_out_time(self, attendance: Attendance) -> datetime | None:
+        if not attendance.shift_id or not attendance.attendance_date:
+            return None
+        _, shift_end_at = self._shift_window(attendance.shift_id, attendance.attendance_date)
+        return shift_end_at.astimezone(timezone.utc)
+
+    def auto_punch_out_overdue(self, now: datetime | None = None) -> int:
+        now_utc = self._aware(now or self.utc_now()).astimezone(timezone.utc)
+        grace_minutes = max(0, getattr(settings, "auto_punch_out_after_minutes", 30))
+        open_records = Attendance.objects.visible().filter(
+            attendance_status="approved",
+            check_in_time__ne=None,
+            check_out_time=None,
+            shift_id__ne=None,
+        )
+        updated = 0
+        for attendance in open_records:
+            auto_out_at = self._auto_punch_out_time(attendance)
+            if not auto_out_at:
+                continue
+            due_at = auto_out_at + timedelta(minutes=grace_minutes)
+            if now_utc < due_at:
+                continue
+            attendance.check_out_time = auto_out_at
+            attendance.check_out_status = "auto_punch_out"
+            if attendance.check_in_time:
+                start = self._aware(attendance.check_in_time)
+                attendance.total_work_minutes = max(0, int((auto_out_at - start).total_seconds() // 60))
+            attendance.save()
+            updated += 1
+        return updated
+
     def today_for_employee(self, user: User) -> dict:
         employee = self._employee_for_user(user)
         attendance = Attendance.objects.visible().filter(employee_id=employee, attendance_date=self.local_date()).first()
@@ -108,19 +140,30 @@ class AttendanceService(BaseService):
 
     def check_in(self, data: dict, ip_address: str | None) -> Attendance:
         employee = Employee.objects.visible().filter(id=data["employee_id"]).first()
-        branch = Branch.objects.visible().filter(id=data["branch_id"]).first()
+        branch = Branch.objects.visible().filter(id=data["branch_id"]).first() if data.get("branch_id") else employee.branch_id if employee else None
         if not employee or not branch:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee or branch not found")
-        approved, distance = within_geofence(data["latitude"], data["longitude"], branch.latitude, branch.longitude, branch.allowed_radius)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee branch is not assigned")
+        open_attendance = (
+            Attendance.objects.visible()
+            .filter(employee_id=employee, attendance_date=self.local_date(), check_in_time__ne=None, check_out_time=None)
+            .first()
+        )
+        if open_attendance:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee is already punched in. Use manual punch-out first.")
+        latitude = data.get("latitude", branch.latitude)
+        longitude = data.get("longitude", branch.longitude)
+        approved, distance = (True, 0) if data.get("latitude") is None or data.get("longitude") is None else within_geofence(latitude, longitude, branch.latitude, branch.longitude, branch.allowed_radius)
         now = self.utc_now()
         attendance = Attendance(
+            tenant_id=employee.tenant_id,
+            company_id=employee.company_id,
             employee_id=employee,
             branch_id=branch,
             attendance_date=self.to_local(now).date(),
             check_in_time=now,
             shift_id=employee.shift_id,
-            latitude=data["latitude"],
-            longitude=data["longitude"],
+            latitude=latitude,
+            longitude=longitude,
             distance_from_office=distance,
             device_info=data.get("device_info"),
             browser_fingerprint=data.get("browser_fingerprint"),
@@ -144,17 +187,25 @@ class AttendanceService(BaseService):
         }
         return self.check_in(payload, ip_address)
 
-    def check_out(self, attendance_id: str, data: dict) -> Attendance:
+    def check_out(self, attendance_id: str, data: dict, allow_manual_correction: bool = False) -> Attendance:
+        self.auto_punch_out_overdue()
         attendance = self.repository.get(attendance_id)
-        if attendance.attendance_status != "approved":
+        if attendance.attendance_status != "approved" and not allow_manual_correction:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rejected attendance cannot be checked out")
+        if attendance.check_out_time:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already punched out")
         branch = attendance.branch_id
-        approved, distance = within_geofence(data["latitude"], data["longitude"], branch.latitude, branch.longitude, branch.allowed_radius)
+        latitude = data.get("latitude", branch.latitude)
+        longitude = data.get("longitude", branch.longitude)
+        approved, distance = (True, 0) if data.get("latitude") is None or data.get("longitude") is None else within_geofence(latitude, longitude, branch.latitude, branch.longitude, branch.allowed_radius)
         if not approved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Outside allowed radius by {distance} meters")
         attendance.check_out_time = self.utc_now()
-        attendance.latitude = data["latitude"]
-        attendance.longitude = data["longitude"]
+        if allow_manual_correction:
+            attendance.attendance_status = "approved"
+            attendance.rejection_reason = None
+        attendance.latitude = latitude
+        attendance.longitude = longitude
         attendance.distance_from_office = distance
         if attendance.check_in_time and attendance.check_out_time:
             attendance.total_work_minutes = max(0, int((self._aware(attendance.check_out_time) - self._aware(attendance.check_in_time)).total_seconds() // 60))
@@ -165,7 +216,22 @@ class AttendanceService(BaseService):
         attendance.save()
         return attendance
 
+    def check_out_employee(self, employee_id: str, data: dict) -> Attendance:
+        employee = Employee.objects.visible().filter(id=employee_id).first()
+        if not employee:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+        attendance = (
+            Attendance.objects.visible()
+            .filter(employee_id=employee, check_in_time__ne=None, check_out_time=None)
+            .order_by("-attendance_date", "-created_at")
+            .first()
+        )
+        if not attendance:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No open punch-in found for this employee")
+        return self.check_out(str(attendance.id), data, allow_manual_correction=True)
+
     def punch_out(self, user: User, data: dict) -> Attendance:
+        self.auto_punch_out_overdue()
         employee = self._employee_for_user(user)
         attendance = Attendance.objects.visible().filter(employee_id=employee, attendance_date=self.local_date()).first()
         if not attendance or not attendance.check_in_time:

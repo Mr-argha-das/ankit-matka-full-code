@@ -9,6 +9,7 @@ from app.api import (
     attendance,
     branches,
     companies,
+    dashboard,
     departments,
     employees,
     kiosk,
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(departments.router, prefix="/api/departments", tags=["Departments"])
     app.include_router(employees.router, prefix="/api/employees", tags=["Employees"])
     app.include_router(kiosk.router, prefix="/api/kiosk", tags=["Kiosk"])
+    app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
     app.include_router(attendance.router, prefix="/api/attendance", tags=["Attendance"])
     app.include_router(leaves.router, prefix="/api/leaves", tags=["Leaves"])
     app.include_router(shifts.router, prefix="/api/shifts", tags=["Shifts"])

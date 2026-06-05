@@ -19,7 +19,8 @@ Future<void> main() async {
 }
 
 class AttendanceKioskApp extends StatelessWidget {
-  const AttendanceKioskApp({super.key, required this.cameras, this.enableFaceService = true});
+  const AttendanceKioskApp(
+      {super.key, required this.cameras, this.enableFaceService = true});
 
   final List<CameraDescription> cameras;
   final bool enableFaceService;
@@ -53,8 +54,10 @@ class AttendanceKioskApp extends StatelessWidget {
 }
 
 enum KioskPage { scanner, enroll, settings }
+
 class KioskShell extends StatefulWidget {
-  const KioskShell({super.key, required this.cameras, this.enableFaceService = true});
+  const KioskShell(
+      {super.key, required this.cameras, this.enableFaceService = true});
 
   final List<CameraDescription> cameras;
   final bool enableFaceService;
@@ -64,7 +67,8 @@ class KioskShell extends StatefulWidget {
 }
 
 class _KioskShellState extends State<KioskShell> {
-  final _baseUrlController = TextEditingController(text: 'https://b3a8-103-87-58-12.ngrok-free.app');
+  final _baseUrlController =
+      TextEditingController(text: 'https://b3a8-103-87-58-12.ngrok-free.app');
   final _branchCodeController = TextEditingController(text: 'AHIT');
   final _pinController = TextEditingController(text: '1234');
   final _employeeCodeController = TextEditingController();
@@ -79,6 +83,8 @@ class _KioskShellState extends State<KioskShell> {
   bool _autoScan = false;
   String _message = 'Connect kiosk from settings.';
   Timer? _scanTimer;
+  Timer? _cooldownTimer;
+  DateTime? _cooldownUntil;
 
   @override
   void initState() {
@@ -99,10 +105,14 @@ class _KioskShellState extends State<KioskShell> {
 
   Future<void> _restore() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrlController.text = prefs.getString('base_url') ?? _baseUrlController.text;
-    _branchCodeController.text = prefs.getString('branch_code') ?? _branchCodeController.text;
+    _baseUrlController.text =
+        prefs.getString('base_url') ?? _baseUrlController.text;
+    _branchCodeController.text =
+        prefs.getString('branch_code') ?? _branchCodeController.text;
     _pinController.text = prefs.getString('kiosk_pin') ?? _pinController.text;
-    final hasSavedSetup = prefs.containsKey('base_url') && prefs.containsKey('branch_code') && prefs.containsKey('kiosk_pin');
+    final hasSavedSetup = prefs.containsKey('base_url') &&
+        prefs.containsKey('branch_code') &&
+        prefs.containsKey('kiosk_pin');
     if (hasSavedSetup) {
       await _startKiosk(silent: true);
     }
@@ -117,7 +127,8 @@ class _KioskShellState extends State<KioskShell> {
       (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => widget.cameras.first,
     );
-    final controller = CameraController(frontCamera, ResolutionPreset.high, enableAudio: false);
+    final controller = CameraController(frontCamera, ResolutionPreset.high,
+        enableAudio: false);
     await controller.initialize();
     if (!mounted) return;
     setState(() => _camera = controller);
@@ -142,7 +153,9 @@ class _KioskShellState extends State<KioskShell> {
     if (raw.isEmpty) {
       throw Exception('Enter backend URL first.');
     }
-    final withScheme = raw.startsWith('http://') || raw.startsWith('https://') ? raw : 'http://$raw';
+    final withScheme = raw.startsWith('http://') || raw.startsWith('https://')
+        ? raw
+        : 'http://$raw';
     return withScheme.replaceAll(RegExp(r'/+$'), '');
   }
 
@@ -186,7 +199,8 @@ class _KioskShellState extends State<KioskShell> {
     if (_autoScan) return;
     _autoScan = true;
     _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(seconds: 3), (_) => _scanAndPunch());
+    _scanTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) => _scanAndPunch());
     Future<void>.delayed(const Duration(milliseconds: 600), _scanAndPunch);
   }
 
@@ -194,6 +208,34 @@ class _KioskShellState extends State<KioskShell> {
     _autoScan = false;
     _scanTimer?.cancel();
     _scanTimer = null;
+  }
+
+  int get _cooldownRemainingSeconds {
+    final until = _cooldownUntil;
+    if (until == null) return 0;
+    final remaining = until.difference(DateTime.now()).inSeconds + 1;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  bool get _inScanCooldown => _cooldownRemainingSeconds > 0;
+
+  void _startScanCooldown(String successMessage) {
+    _cooldownTimer?.cancel();
+    _cooldownUntil = DateTime.now().add(const Duration(seconds: 10));
+    void tick() {
+      final remaining = _cooldownRemainingSeconds;
+      if (remaining <= 0) {
+        _cooldownTimer?.cancel();
+        _cooldownTimer = null;
+        _cooldownUntil = null;
+        _setMessage('Ready for next face scan.');
+        return;
+      }
+      _setMessage('$successMessage Next scan in ${remaining}s.');
+    }
+
+    tick();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
   }
 
   Future<List<double>> _captureEmbedding() async {
@@ -209,6 +251,11 @@ class _KioskShellState extends State<KioskShell> {
 
   Future<void> _scanAndPunch() async {
     if (!_autoScan || _busy || _page != KioskPage.scanner) return;
+    if (_inScanCooldown) {
+      _setMessage(
+          'Please wait ${_cooldownRemainingSeconds}s before next face scan.');
+      return;
+    }
     final client = _client;
     final session = _session;
     if (client == null || session == null) {
@@ -230,11 +277,12 @@ class _KioskShellState extends State<KioskShell> {
       final name = result['employee_name']?.toString() ?? 'Employee';
       final firstName = name.split(' ').first;
       final didPunchOut = result['action'] == 'punch_out';
-      final message = didPunchOut ? 'Punch out successful. Thank you $firstName.' : 'Punch in successful. Thank you $firstName.';
+      final message = didPunchOut
+          ? 'Punch out successful. Thank you $firstName.'
+          : 'Punch in successful. Thank you $firstName.';
       _toast(message, success: true);
       await _speak(message);
-      _setMessage(message);
-      await Future<void>.delayed(const Duration(seconds: 2));
+      _startScanCooldown(message);
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (!message.toLowerCase().contains('no face')) {
@@ -288,7 +336,8 @@ class _KioskShellState extends State<KioskShell> {
       msg: message,
       toastLength: Toast.LENGTH_LONG,
       gravity: ToastGravity.TOP,
-      backgroundColor: success ? const Color(0xFF0F766E) : const Color(0xFFDC2626),
+      backgroundColor:
+          success ? const Color(0xFF0F766E) : const Color(0xFFDC2626),
       textColor: Colors.white,
       fontSize: 16,
     );
@@ -302,6 +351,7 @@ class _KioskShellState extends State<KioskShell> {
   @override
   void dispose() {
     _stopAutoScan();
+    _cooldownTimer?.cancel();
     _camera?.dispose();
     _faceService.dispose();
     _tts.stop();
@@ -360,25 +410,49 @@ class _Sidebar extends StatelessWidget {
               Container(
                 width: 46,
                 height: 46,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                child: const Center(child: Text('K', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF21185F)))),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14)),
+                child: const Center(
+                    child: Text('K',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF21185F)))),
               ),
               const SizedBox(width: 12),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('KioskAttend', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-                    Text('Face punch console', style: TextStyle(color: Color(0xFFAAB2D5), fontSize: 12)),
+                    Text('KioskAttend',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900)),
+                    Text('Face punch console',
+                        style:
+                            TextStyle(color: Color(0xFFAAB2D5), fontSize: 12)),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 28),
-          _NavItem(icon: Icons.face_retouching_natural, label: 'Punch Scanner', selected: state._page == KioskPage.scanner, onTap: () => state._openPage(KioskPage.scanner)),
-          _NavItem(icon: Icons.person_add_alt_1, label: 'Enroll Face', selected: state._page == KioskPage.enroll, onTap: () => state._openPage(KioskPage.enroll)),
-          _NavItem(icon: Icons.settings, label: 'Settings', selected: state._page == KioskPage.settings, onTap: () => state._openPage(KioskPage.settings)),
+          _NavItem(
+              icon: Icons.face_retouching_natural,
+              label: 'Punch Scanner',
+              selected: state._page == KioskPage.scanner,
+              onTap: () => state._openPage(KioskPage.scanner)),
+          _NavItem(
+              icon: Icons.person_add_alt_1,
+              label: 'Enroll Face',
+              selected: state._page == KioskPage.enroll,
+              onTap: () => state._openPage(KioskPage.enroll)),
+          _NavItem(
+              icon: Icons.settings,
+              label: 'Settings',
+              selected: state._page == KioskPage.settings,
+              onTap: () => state._openPage(KioskPage.settings)),
           const Spacer(),
           _StatusPill(session: state._session),
         ],
@@ -396,10 +470,13 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return NavigationBar(
       selectedIndex: state._page.index,
-      onDestinationSelected: (index) => state._openPage(KioskPage.values[index]),
+      onDestinationSelected: (index) =>
+          state._openPage(KioskPage.values[index]),
       destinations: const [
-        NavigationDestination(icon: Icon(Icons.face_retouching_natural), label: 'Punch'),
-        NavigationDestination(icon: Icon(Icons.person_add_alt_1), label: 'Enroll'),
+        NavigationDestination(
+            icon: Icon(Icons.face_retouching_natural), label: 'Punch'),
+        NavigationDestination(
+            icon: Icon(Icons.person_add_alt_1), label: 'Enroll'),
         NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
       ],
     );
@@ -407,7 +484,11 @@ class _BottomNav extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.icon, required this.label, required this.selected, required this.onTap});
+  const _NavItem(
+      {required this.icon,
+      required this.label,
+      required this.selected,
+      required this.onTap});
 
   final IconData icon;
   final String label;
@@ -427,13 +508,18 @@ class _NavItem extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? const Color(0xFF1C2553) : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
-            border: selected ? const Border(left: BorderSide(color: Color(0xFF7DD3FC), width: 4)) : null,
+            border: selected
+                ? const Border(
+                    left: BorderSide(color: Color(0xFF7DD3FC), width: 4))
+                : null,
           ),
           child: Row(
             children: [
               Icon(icon, color: Colors.white, size: 22),
               const SizedBox(width: 12),
-              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800)),
             ],
           ),
         ),
@@ -453,12 +539,16 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: ready ? const Color(0xFFECFDF5) : Colors.white.withValues(alpha: .08),
+        color: ready
+            ? const Color(0xFFECFDF5)
+            : Colors.white.withValues(alpha: .08),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Text(
         ready ? 'Ready at ${session!.branchName}' : 'Kiosk not started',
-        style: TextStyle(color: ready ? const Color(0xFF047857) : Colors.white, fontWeight: FontWeight.w800),
+        style: TextStyle(
+            color: ready ? const Color(0xFF047857) : Colors.white,
+            fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -487,7 +577,8 @@ class _ScannerPage extends StatelessWidget {
         else
           const ColoredBox(
             color: Color(0xFF0B1020),
-            child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            child:
+                Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
         const _ScannerScrim(),
         SafeArea(
@@ -498,9 +589,13 @@ class _ScannerPage extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _GlassChip(icon: Icons.apartment, label: state._session?.branchName ?? 'Start kiosk from settings'),
+                    _GlassChip(
+                        icon: Icons.apartment,
+                        label: state._session?.branchName ??
+                            'Start kiosk from settings'),
                     const Spacer(),
-                    const _GlassChip(icon: Icons.autorenew, label: 'Auto Punch'),
+                    const _GlassChip(
+                        icon: Icons.autorenew, label: 'Auto Punch'),
                   ],
                 ),
                 const Spacer(),
@@ -516,7 +611,11 @@ class _ScannerPage extends StatelessWidget {
                       alignment: Alignment.bottomCenter,
                       child: Padding(
                         padding: EdgeInsets.only(bottom: 24),
-                        child: Text('Place face here', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                        child: Text('Place face here',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900)),
                       ),
                     ),
                   ),
@@ -540,7 +639,11 @@ class _ScannerScrim extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.black.withValues(alpha: .62), Colors.transparent, Colors.black.withValues(alpha: .7)],
+          colors: [
+            Colors.black.withValues(alpha: .62),
+            Colors.transparent,
+            Colors.black.withValues(alpha: .7)
+          ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -559,13 +662,17 @@ class _GlassChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: .36), borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: .36),
+          borderRadius: BorderRadius.circular(999)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: Colors.white, size: 18),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -582,17 +689,28 @@ class _MessageBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 30)]),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(color: Color(0x33000000), blurRadius: 30)
+          ]),
       child: Row(
         children: [
           if (busy) ...[
-            const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 3)),
+            const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 3)),
             const SizedBox(width: 12),
           ] else ...[
             const Icon(Icons.center_focus_strong, color: Color(0xFF21185F)),
             const SizedBox(width: 12),
           ],
-          Expanded(child: Text(message, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+          Expanded(
+              child: Text(message,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w800))),
         ],
       ),
     );
@@ -609,7 +727,8 @@ class _EnrollPage extends StatelessWidget {
     final camera = state._camera;
     return _PageScaffold(
       title: 'Enroll Face',
-      subtitle: 'Register employee face once. After enrollment the kiosk can auto punch in and out.',
+      subtitle:
+          'Register employee face once. After enrollment the kiosk can auto punch in and out.',
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isCompact = constraints.maxWidth < 720;
@@ -618,7 +737,11 @@ class _EnrollPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: 420, child: _CameraCard(camera: camera, hint: 'Ask employee to look straight')),
+                  SizedBox(
+                      height: 420,
+                      child: _CameraCard(
+                          camera: camera,
+                          hint: 'Ask employee to look straight')),
                   const SizedBox(height: 16),
                   _EnrollFormCard(state: state),
                 ],
@@ -629,7 +752,8 @@ class _EnrollPage extends StatelessWidget {
             children: [
               Expanded(
                 flex: 5,
-                child: _CameraCard(camera: camera, hint: 'Ask employee to look straight'),
+                child: _CameraCard(
+                    camera: camera, hint: 'Ask employee to look straight'),
               ),
               const SizedBox(width: 18),
               Expanded(flex: 4, child: _EnrollFormCard(state: state)),
@@ -653,14 +777,18 @@ class _EnrollFormCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Employee Enrollment', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const Text('Employee Enrollment',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          Text('Enter employee code from admin panel, then capture face.', style: TextStyle(color: Colors.grey.shade700, height: 1.35)),
+          Text('Enter employee code from admin panel, then capture face.',
+              style: TextStyle(color: Colors.grey.shade700, height: 1.35)),
           const SizedBox(height: 22),
           TextField(
             controller: state._employeeCodeController,
             textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(labelText: 'Employee Code', prefixIcon: Icon(Icons.badge_outlined)),
+            decoration: const InputDecoration(
+                labelText: 'Employee Code',
+                prefixIcon: Icon(Icons.badge_outlined)),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -668,11 +796,14 @@ class _EnrollFormCard extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: state._busy ? null : state._enrollFace,
               icon: const Icon(Icons.face_retouching_natural),
-              label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Capture & Enroll Face')),
+              label: const FittedBox(
+                  fit: BoxFit.scaleDown, child: Text('Capture & Enroll Face')),
             ),
           ),
           const SizedBox(height: 16),
-          Text(state._message, style: const TextStyle(fontWeight: FontWeight.w700, height: 1.35)),
+          Text(state._message,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w700, height: 1.35)),
         ],
       ),
     );
@@ -688,7 +819,8 @@ class _SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return _PageScaffold(
       title: 'Kiosk Settings',
-      subtitle: 'Start this TL phone from any kiosk branch. After that, any enrolled employee in the company can punch here.',
+      subtitle:
+          'Start this TL phone from any kiosk branch. After that, any enrolled employee in the company can punch here.',
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
@@ -696,7 +828,9 @@ class _SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Connection', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                const Text('Connection',
+                    style:
+                        TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 18),
                 TextField(
                   controller: state._baseUrlController,
@@ -707,14 +841,23 @@ class _SettingsPage extends StatelessWidget {
                   decoration: const InputDecoration(
                     labelText: 'Backend URL',
                     hintText: 'http://192.168.1.10:8001',
-                    helperText: 'Use your server IP and port. http:// is added automatically if missing.',
+                    helperText:
+                        'Use your server IP and port. http:// is added automatically if missing.',
                     prefixIcon: Icon(Icons.link),
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: state._branchCodeController, decoration: const InputDecoration(labelText: 'Branch Code', prefixIcon: Icon(Icons.apartment))),
+                TextField(
+                    controller: state._branchCodeController,
+                    decoration: const InputDecoration(
+                        labelText: 'Branch Code',
+                        prefixIcon: Icon(Icons.apartment))),
                 const SizedBox(height: 12),
-                TextField(controller: state._pinController, obscureText: true, decoration: const InputDecoration(labelText: 'Kiosk PIN', prefixIcon: Icon(Icons.pin))),
+                TextField(
+                    controller: state._pinController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                        labelText: 'Kiosk PIN', prefixIcon: Icon(Icons.pin))),
                 const SizedBox(height: 18),
                 FilledButton.icon(
                   onPressed: state._busy ? null : state._startKiosk,
@@ -722,7 +865,8 @@ class _SettingsPage extends StatelessWidget {
                   label: const Text('Start Kiosk'),
                 ),
                 const SizedBox(height: 14),
-                Text(state._message, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(state._message,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -733,7 +877,8 @@ class _SettingsPage extends StatelessWidget {
 }
 
 class _PageScaffold extends StatelessWidget {
-  const _PageScaffold({required this.title, required this.subtitle, required this.child});
+  const _PageScaffold(
+      {required this.title, required this.subtitle, required this.child});
 
   final String title;
   final String subtitle;
@@ -748,9 +893,15 @@ class _PageScaffold extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(title, style: TextStyle(fontSize: compact ? 28 : 32, fontWeight: FontWeight.w900)),
+            Text(title,
+                style: TextStyle(
+                    fontSize: compact ? 28 : 32, fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            Text(subtitle, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600, height: 1.35)),
+            Text(subtitle,
+                style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35)),
             SizedBox(height: compact ? 18 : 22),
             Expanded(child: child),
           ],
@@ -774,7 +925,10 @@ class _SurfaceCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(compact ? 22 : 28),
         border: Border.all(color: const Color(0xFFD8E0EF)),
-        boxShadow: const [BoxShadow(color: Color(0x110F172A), blurRadius: 28, offset: Offset(0, 18))],
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x110F172A), blurRadius: 28, offset: Offset(0, 18))
+        ],
       ),
       child: child,
     );
@@ -810,12 +964,16 @@ class _CameraCard extends StatelessWidget {
               else
                 const ColoredBox(
                   color: Color(0xFF0B1020),
-                  child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                  child: Center(
+                      child: CircularProgressIndicator(color: Colors.white)),
                 ),
               DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: .72)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: .72)
+                    ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -825,14 +983,22 @@ class _CameraCard extends StatelessWidget {
                 child: Container(
                   width: ovalWidth,
                   height: ovalHeight,
-                  decoration: BoxDecoration(border: Border.all(color: Colors.white, width: 3), borderRadius: BorderRadius.circular(160)),
+                  decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white, width: 3),
+                      borderRadius: BorderRadius.circular(160)),
                 ),
               ),
               Positioned(
                 left: 18,
                 right: 18,
                 bottom: 18,
-                child: Text(hint, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, height: 1.25)),
+                child: Text(hint,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        height: 1.25)),
               ),
             ],
           );

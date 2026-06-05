@@ -214,41 +214,55 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("submit", async (event) => {
-  if (event.target.id === "loginForm") {
-    event.preventDefault();
-    const body = formBody(event.target);
-    const data = await apiFetch("/api/auth/login", {method: "POST", body: JSON.stringify(body)});
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("tenant_id");
-    localStorage.removeItem("company_id");
-    window.location.href = "/";
-  }
-  if (event.target.classList.contains("ajax-form")) {
-    event.preventDefault();
-    const body = formBody(event.target);
-    await apiFetch(event.target.dataset.api, {method: "POST", body: JSON.stringify(body)});
-    toast("Saved");
-    window.location.reload();
-  }
-  if (event.target.id === "attendanceForm") {
-    event.preventDefault();
-    currentLocationPayload(async (location) => {
-      const body = {...formBody(event.target), ...location};
+  try {
+    if (event.target.id === "loginForm") {
+      event.preventDefault();
+      const body = formBody(event.target);
+      await apiFetch("/api/auth/login", {method: "POST", body: JSON.stringify(body)});
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("tenant_id");
+      localStorage.removeItem("company_id");
+      window.location.href = "/";
+    }
+    if (event.target.classList.contains("ajax-form")) {
+      event.preventDefault();
+      const body = formBody(event.target);
+      await apiFetch(event.target.dataset.api, {method: "POST", body: JSON.stringify(body)});
+      toast("Saved");
+      window.location.reload();
+    }
+    if (event.target.id === "attendanceForm") {
+      event.preventDefault();
+      const body = formBody(event.target);
       const result = await apiFetch("/api/attendance/check-in", {method: "POST", body: JSON.stringify(body)});
-      toast(`Attendance ${result.attendance_status}. Distance ${result.distance_from_office}m`, result.attendance_status === "approved" ? "success" : "danger");
-    });
-  }
-  if (event.target.classList.contains("table-filter-form")) {
-    event.preventDefault();
-    const table = document.querySelector(event.target.dataset.target);
-    if (!table) return;
-    const params = new URLSearchParams();
-    Object.entries(formBody(event.target)).forEach(([key, value]) => {
-      if (value !== "") params.set(key, value);
-    });
-    table.dataset.query = params.toString() ? `?${params.toString()}` : "";
-    table.dataset.page = "1";
-    hydrateDataTable(table);
+      toast(result.attendance_status === "approved" ? "Manual punch-in saved." : "Manual punch-in rejected.", result.attendance_status === "approved" ? "success" : "danger");
+      bootstrap.Modal.getInstance(document.getElementById("manualPunchModal"))?.hide();
+      const table = document.querySelector("#attendanceTable");
+      if (table) hydrateDataTable(table);
+    }
+    if (event.target.id === "manualPunchOutForm") {
+      event.preventDefault();
+      const body = formBody(event.target);
+      const result = await apiFetch("/api/attendance/manual-check-out", {method: "POST", body: JSON.stringify(body)});
+      toast(`Manual punch-out saved. Worked ${result.total_work_minutes || 0} min`);
+      bootstrap.Modal.getInstance(document.getElementById("manualPunchModal"))?.hide();
+      const table = document.querySelector("#attendanceTable");
+      if (table) hydrateDataTable(table);
+    }
+    if (event.target.classList.contains("table-filter-form")) {
+      event.preventDefault();
+      const table = document.querySelector(event.target.dataset.target);
+      if (!table) return;
+      const params = new URLSearchParams();
+      Object.entries(formBody(event.target)).forEach(([key, value]) => {
+        if (value !== "") params.set(key, value);
+      });
+      table.dataset.query = params.toString() ? `?${params.toString()}` : "";
+      table.dataset.page = "1";
+      hydrateDataTable(table);
+    }
+  } catch (error) {
+    toast(error.message || "Request failed", "danger");
   }
 });
 
@@ -301,11 +315,163 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".data-table").forEach((table) => hydrateDataTable(table));
 });
 
-function renderDashboardCharts() {
-  const attendance = document.getElementById("attendanceChart");
-  const revenue = document.getElementById("revenueChart");
-  if (attendance) new Chart(attendance, {type: "line", data: {labels: ["Mon", "Tue", "Wed", "Thu", "Fri"], datasets: [{label: "Attendance", data: [80, 96, 88, 101, 94], borderColor: "#0f766e"}]}});
-  if (revenue) new Chart(revenue, {type: "doughnut", data: {labels: ["Basic", "Professional", "Enterprise"], datasets: [{data: [35, 45, 20], backgroundColor: ["#0f766e", "#2563eb", "#f59e0b"]}]}});
+function setText(selector, value) {
+  document.querySelectorAll(selector).forEach((el) => {
+    el.textContent = value ?? "--";
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[char]));
+}
+
+function statusBadge(label) {
+  const normalized = String(label || "").toLowerCase();
+  const tone = normalized.includes("active") || normalized.includes("approved") || normalized.includes("on time")
+    ? "success"
+    : normalized.includes("late") || normalized.includes("pending") || normalized.includes("half") || normalized.includes("auto")
+      ? "warning"
+      : normalized.includes("reject") || normalized.includes("missing") || normalized.includes("no punches")
+        ? "danger"
+        : "neutral";
+  return `<span class="status-badge status-badge-${tone}">${escapeHtml(label || "Needs review")}</span>`;
+}
+
+function renderEmpty(target, message) {
+  target.innerHTML = `<div class="empty-state">${message}</div>`;
+}
+
+function renderDashboardTrend(data) {
+  const canvas = document.getElementById("attendanceTrendChart");
+  if (!canvas || !window.Chart) return;
+  const labels = data.trend.map((item) => item.label);
+  new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Present",
+          data: data.trend.map((item) => item.present),
+          borderColor: "#3ecf8e",
+          backgroundColor: "rgba(62, 207, 142, .08)",
+          fill: true,
+          tension: .35,
+        },
+        {
+          label: "Late / Half Day",
+          data: data.trend.map((item) => item.late),
+          borderColor: "#f5b244",
+          tension: .35,
+        },
+        {
+          label: "Rejected",
+          data: data.trend.map((item) => item.rejected),
+          borderColor: "#f26b6b",
+          tension: .35,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {legend: {position: "bottom", labels: {boxWidth: 10, boxHeight: 10, color: "#8b8d9a"}}},
+      scales: {
+        y: {beginAtZero: true, ticks: {precision: 0, color: "#8b8d9a"}, grid: {color: "rgba(255,255,255,.07)"}},
+        x: {ticks: {color: "#8b8d9a"}, grid: {display: false}},
+      },
+    },
+  });
+}
+
+function renderDashboardLists(data) {
+  const exceptions = document.getElementById("exceptionList");
+  if (exceptions) {
+    if (!data.exceptions.length) {
+      renderEmpty(exceptions, "No attendance exceptions for today.");
+    } else {
+      exceptions.innerHTML = data.exceptions.map((item) => `
+        <a class="action-item" href="/attendance">
+          <div>
+            <strong>${escapeHtml(item.employee)}</strong>
+            <span>${escapeHtml(item.branch)}</span>
+          </div>
+          <div class="action-item__meta">
+            ${statusBadge(item.issue || item.status)}
+          </div>
+        </a>
+      `).join("");
+    }
+  }
+
+  const branches = document.getElementById("branchHealthList");
+  if (branches) {
+    if (!data.branch_health.length) {
+      renderEmpty(branches, "No branches configured yet.");
+    } else {
+      branches.innerHTML = data.branch_health.map((item) => `
+        <div class="branch-health-item">
+          <div class="branch-health-item__main">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${escapeHtml(item.present)}/${escapeHtml(item.employees)} present</span>
+          </div>
+          <div class="branch-health-item__bar">
+            <span style="width:${Math.max(0, Math.min(100, Number(item.coverage) || 0))}%"></span>
+          </div>
+          ${statusBadge(item.status)}
+        </div>
+      `).join("");
+    }
+  }
+
+  const gaps = document.getElementById("setupGapList");
+  if (gaps) {
+    if (!data.setup_gaps.length) {
+      renderEmpty(gaps, "Configuration is complete for the current scope.");
+    } else {
+      gaps.innerHTML = data.setup_gaps.map((item) => `
+        <a class="action-item" href="${escapeHtml(item.href)}">
+          <div>
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(item.meta)}</span>
+          </div>
+          ${statusBadge("Missing")}
+        </a>
+      `).join("");
+    }
+  }
+}
+
+async function renderDashboard() {
+  try {
+    const data = await apiFetch("/api/dashboard/summary");
+    const formattedDate = new Date(`${data.date}T00:00:00`).toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+    setText("#dashboardDate", formattedDate);
+    Object.entries(data.metrics).forEach(([key, value]) => {
+      setText(`[data-dashboard-metric="${key}"]`, value);
+    });
+    setText("#facesEnrolled", data.enrollment.enrolled);
+    setText("#facesMissing", data.enrollment.missing);
+    const coverageBar = document.getElementById("faceCoverageBar");
+    if (coverageBar) coverageBar.style.width = `${data.enrollment.coverage}%`;
+    renderDashboardTrend(data);
+    renderDashboardLists(data);
+  } catch (error) {
+    toast(error.message || "Unable to load dashboard", "danger");
+    document.querySelectorAll(".action-list, .branch-health-list").forEach((target) => {
+      renderEmpty(target, "Unable to load this panel.");
+    });
+  }
 }
 
 function renderBranchMap() {

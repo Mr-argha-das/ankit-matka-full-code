@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     smtp_from: str = "no-reply@example.com"
     whatsapp_provider_url: str = ""
     whatsapp_token: str = ""
+    auto_punch_out_after_minutes: int = 30
+    face_punch_cooldown_seconds: int = 10
 
 
 @lru_cache
