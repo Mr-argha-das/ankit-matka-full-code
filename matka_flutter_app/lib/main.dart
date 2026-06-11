@@ -6,7 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 const webAppUrl = String.fromEnvironment(
   'WEB_APP_URL',
-  defaultValue: 'https://game.natraj777.com/',
+  defaultValue: 'https://game.natraj777.com/login',
 );
 
 void main() {
@@ -20,7 +20,7 @@ class MatkaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Matka',
+      title: 'Natarj 777',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
