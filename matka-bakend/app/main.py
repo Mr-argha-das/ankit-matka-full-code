@@ -6,6 +6,7 @@ from mongoengine import connect
 from app.config import settings
 import os
 from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 class AddCORSHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -131,3 +132,25 @@ app.include_router(v1_autoPay_routes.router)
 @app.get("/")
 def root():
     return {"status": "ok", "message": "Matka backend running"}
+
+
+def _app_download_response():
+    apk_path = "static/apk/Natarj-777.apk"
+    if not os.path.exists(apk_path):
+        return JSONResponse(status_code=404, content={"detail": "APK not found"})
+
+    return FileResponse(
+        apk_path,
+        media_type="application/vnd.android.package-archive",
+        filename="Natarj-777.apk",
+    )
+
+
+@app.get("/app/download")
+def download_app():
+    return _app_download_response()
+
+
+@app.head("/app/download")
+def download_app_head():
+    return _app_download_response()
