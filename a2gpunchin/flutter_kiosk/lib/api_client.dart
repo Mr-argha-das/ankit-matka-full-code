@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class KioskSession {
   KioskSession({
@@ -20,6 +22,33 @@ class KioskSession {
         branchName: json['branch_name'] as String,
         tenantId: json['tenant_id'] as String,
         companyId: json['company_id'] as String?,
+      );
+}
+
+class KioskEmployeeOption {
+  KioskEmployeeOption({
+    required this.employeeId,
+    required this.employeeCode,
+    required this.employeeName,
+    this.department,
+    required this.faceEnrolled,
+  });
+
+  final String employeeId;
+  final String employeeCode;
+  final String employeeName;
+  final String? department;
+  final bool faceEnrolled;
+
+  String get label => '$employeeCode - $employeeName';
+
+  factory KioskEmployeeOption.fromJson(Map<String, dynamic> json) =>
+      KioskEmployeeOption(
+        employeeId: json['employee_id']?.toString() ?? '',
+        employeeCode: json['employee_code']?.toString() ?? '',
+        employeeName: json['employee_name']?.toString() ?? '',
+        department: json['department']?.toString(),
+        faceEnrolled: json['face_enrolled'] == true,
       );
 }
 
@@ -55,19 +84,16 @@ class KioskApiClient {
     required String branchId,
     required String kioskPin,
     required String action,
-    required List<double> faceEmbedding,
+    required Uint8List imageBytes,
   }) async {
-    final response = await http.post(
-      _uri('/api/kiosk/face-punch'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'branch_id': branchId,
-        'kiosk_pin': kioskPin,
-        'action': action,
-        'face_embedding': faceEmbedding,
-        'device_info': 'flutter-kiosk',
-      }),
-    );
+    final request = http.MultipartRequest('POST', _uri('/api/v1/attendance/punch'))
+      ..files.add(http.MultipartFile.fromBytes(
+        'image',
+        imageBytes,
+        filename: 'punch.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ));
+    final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200) {
       throw Exception(_detail(response));
     }
@@ -78,22 +104,46 @@ class KioskApiClient {
     required String branchId,
     required String kioskPin,
     required String employeeCode,
-    required List<double> faceEmbedding,
+    required Uint8List imageBytes,
   }) async {
-    final response = await http.post(
-      _uri('/api/kiosk/enroll-face'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'branch_id': branchId,
-        'kiosk_pin': kioskPin,
-        'employee_code': employeeCode,
-        'face_embedding': faceEmbedding,
-      }),
-    );
+    final request = http.MultipartRequest('POST', _uri('/api/v1/attendance/employees'))
+      ..fields['employee_id'] = employeeCode
+      ..fields['name'] = employeeCode
+      ..files.add(http.MultipartFile.fromBytes(
+        'image',
+        imageBytes,
+        filename: '$employeeCode.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ));
+    final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200) {
       throw Exception(_detail(response));
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<List<KioskEmployeeOption>> searchEmployees({
+    required String branchId,
+    required String kioskPin,
+    String search = '',
+  }) async {
+    final uri = _uri('/api/v1/attendance/employees/search').replace(
+      queryParameters: {
+        'branch_id': branchId,
+        'kiosk_pin': kioskPin,
+        'search': search,
+        'limit': '500',
+      },
+    );
+    final response = await http.get(uri);
+    if (response.statusCode != 200) {
+      throw Exception(_detail(response));
+    }
+    final body = jsonDecode(response.body) as List<dynamic>;
+    return body
+        .map((item) => KioskEmployeeOption.fromJson(item as Map<String, dynamic>))
+        .where((item) => item.employeeCode.isNotEmpty)
+        .toList();
   }
 
   String _detail(http.Response response) {

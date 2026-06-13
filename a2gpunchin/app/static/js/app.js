@@ -51,6 +51,23 @@ function tableCell(value) {
   return cell;
 }
 
+function actionCell(item, table) {
+  const cell = document.createElement("td");
+  const editModal = table.dataset.editModal;
+  if (!editModal || !item.id) {
+    cell.textContent = "-";
+    return cell;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn-sm btn-outline-primary table-edit-button";
+  button.dataset.api = `${table.dataset.api}/${item.id}`;
+  button.dataset.modal = editModal;
+  button.textContent = "Edit";
+  cell.appendChild(button);
+  return cell;
+}
+
 function tableUrl(table) {
   const params = new URLSearchParams(table.dataset.query || "");
   params.set("page", table.dataset.page || "1");
@@ -133,9 +150,10 @@ async function hydrateDataTable(table) {
   try {
     const result = await apiFetch(tableUrl(table));
     renderPager(table, result);
+    const items = result.items || [];
     const rows = columns.length
-      ? result.items.map((item) => columns.map((column) => item[column] ?? ""))
-      : result.items.map(Object.values);
+      ? items.map((item) => columns.map((column) => ({column, item, value: item[column] ?? ""})))
+      : items.map((item) => Object.values(item).map((value) => ({column: "", item, value})));
     if (!rows.length) {
       const row = document.createElement("tr");
       const cell = tableCell("No records found");
@@ -146,7 +164,9 @@ async function hydrateDataTable(table) {
     }
     rows.forEach((values) => {
       const row = document.createElement("tr");
-      values.forEach((value) => row.appendChild(tableCell(value)));
+      values.forEach(({column, item, value}) => {
+        row.appendChild(column === "actions" ? actionCell(item, table) : tableCell(value));
+      });
       body.appendChild(row);
     });
   } catch (error) {
@@ -263,6 +283,55 @@ document.addEventListener("change", (event) => {
   }
 });
 
+function resetAjaxForm(form) {
+  form.reset();
+  form.dataset.method = "POST";
+  form.dataset.api = form.dataset.createApi || form.dataset.api;
+  form.querySelectorAll("input[type='hidden'][data-edit-id='true']").forEach((input) => input.remove());
+}
+
+function fillForm(form, data) {
+  Object.entries(data).forEach(([key, value]) => {
+    const input = form.elements[key];
+    if (!input) return;
+    if (input.type === "checkbox") {
+      input.checked = value === true || value === "true";
+      return;
+    }
+    input.value = value ?? "";
+  });
+}
+
+document.addEventListener("click", async (event) => {
+  const addButton = event.target.closest("[data-create-modal]");
+  if (addButton) {
+    const modal = document.querySelector(addButton.dataset.createModal);
+    const form = modal?.querySelector("form.ajax-form");
+    if (form) resetAjaxForm(form);
+    const title = modal?.querySelector(".modal-title");
+    if (title) title.textContent = addButton.dataset.createTitle || "Add";
+    return;
+  }
+
+  const editButton = event.target.closest(".table-edit-button");
+  if (!editButton) return;
+  try {
+    const modal = document.querySelector(editButton.dataset.modal);
+    const form = modal?.querySelector("form.ajax-form");
+    if (!modal || !form) return;
+    const data = await apiFetch(editButton.dataset.api);
+    resetAjaxForm(form);
+    form.dataset.method = "PUT";
+    form.dataset.api = editButton.dataset.api;
+    fillForm(form, data);
+    const title = modal.querySelector(".modal-title");
+    if (title) title.textContent = "Edit Shift Rule";
+    new bootstrap.Modal(modal).show();
+  } catch (error) {
+    toast(error.message || "Unable to load record", "danger");
+  }
+});
+
 document.addEventListener("submit", async (event) => {
   try {
     if (event.target.id === "loginForm") {
@@ -277,7 +346,7 @@ document.addEventListener("submit", async (event) => {
     if (event.target.classList.contains("ajax-form")) {
       event.preventDefault();
       const body = formBody(event.target);
-      await apiFetch(event.target.dataset.api, {method: "POST", body: JSON.stringify(body)});
+      await apiFetch(event.target.dataset.api, {method: event.target.dataset.method || "POST", body: JSON.stringify(body)});
       toast("Saved");
       window.location.reload();
     }

@@ -8,7 +8,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const AttendanceKioskApp(cameras: [], enableFaceService: false));
 
-    expect(find.text('Branch Attendance Kiosk'), findsOneWidget);
+    expect(find.text('Kiosk Settings'), findsOneWidget);
     expect(find.text('Start Kiosk'), findsOneWidget);
   });
 }

@@ -42,6 +42,8 @@ class ReportService:
             return "Pending"
         if item.check_out_status == "auto_punch_out":
             return "Auto Punch Out"
+        if item.check_in_status == "after_half_day":
+            return "After Half Day"
         if item.check_in_status == "half_day":
             return "Half Day"
         if item.check_in_status == "late":
@@ -84,7 +86,7 @@ class ReportService:
                 )
             employees = list(employee_query)
             query = query.filter(employee_id__in=employees)
-        headers = ["Employee ID", "Employee Name", "Date", "Punch In", "Punch Out", "Work Time (H:M)", "Status", "Sub Status"]
+        headers = ["Employee ID", "Employee Name", "Date", "Punch In", "Punch Out", "Work Time (H:M)", "Status", "Main Status", "Sub Status"]
         rows: list[list[Any]] = []
         for item in query.order_by("-attendance_date"):
             employee = item.employee_id
@@ -100,6 +102,7 @@ class ReportService:
                     self._local_time(item.check_out_time) or "",
                     self._work_time(item) or "",
                     self._present_status(item),
+                    self.attendance_service.main_status_label(item),
                     self._sub_status(item),
                 ]
             )
@@ -114,7 +117,9 @@ class ReportService:
         candidate_search: str | None = None,
         department_id: str | None = None,
     ) -> Response:
+        self.attendance_service.sync_missing_face_attendance_records()
         self.attendance_service.auto_punch_out_overdue()
+        self.attendance_service.recalculate_existing_attendance()
         headers, rows = self.attendance_rows(
             start_date=start_date,
             end_date=end_date,

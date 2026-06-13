@@ -40,7 +40,9 @@ def _branch_label(branch: Branch | None) -> str:
 
 @router.get("/summary")
 def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
+    attendance_service.sync_missing_face_attendance_records()
     attendance_service.auto_punch_out_overdue()
+    attendance_service.recalculate_existing_attendance()
     today = date.today()
 
     employees = Employee.objects.visible().filter(status="active")
@@ -54,7 +56,7 @@ def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
     present_today = today_attendance.filter(attendance_status="approved").count()
     rejected_today = today_attendance.filter(attendance_status="rejected").count()
     pending_today = today_attendance.filter(attendance_status="pending").count()
-    late_today = today_attendance.filter(check_in_status__in=["late", "half_day"]).count()
+    late_today = today_attendance.filter(check_in_status__in=["late", "half_day", "after_half_day"]).count()
     missing_checkout = today_attendance.filter(check_in_time__ne=None, check_out_time=None).count()
     absent_today = max(total_employees - present_today, 0)
     pending_leave = Leave.objects.visible().filter(status__in=["pending_manager", "pending_hr"]).count()
@@ -74,7 +76,7 @@ def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
                 "label": day.strftime("%a"),
                 "date": day.isoformat(),
                 "present": records.filter(attendance_status="approved").count(),
-                "late": records.filter(check_in_status__in=["late", "half_day"]).count(),
+                "late": records.filter(check_in_status__in=["late", "half_day", "after_half_day"]).count(),
                 "rejected": records.filter(attendance_status="rejected").count(),
             }
         )
@@ -103,7 +105,7 @@ def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
             __raw__={
                 "$or": [
                     {"attendance_status": {"$in": ["rejected", "pending"]}},
-                    {"check_in_status": {"$in": ["late", "half_day"]}},
+                    {"check_in_status": {"$in": ["late", "half_day", "after_half_day"]}},
                     {"check_out_status": "early_logout"},
                     {"check_out_status": "auto_punch_out"},
                     {"check_in_time": {"$ne": None}, "check_out_time": None},

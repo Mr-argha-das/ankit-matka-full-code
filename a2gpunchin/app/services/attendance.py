@@ -66,11 +66,13 @@ class AttendanceService(BaseService):
         local_check_in = self.to_local(check_in_at) or check_in_at
         start_at, _ = self._shift_window(shift, local_check_in.date())
         late_minutes = max(0, int((local_check_in - start_at).total_seconds() // 60))
+        after_half_day_after = getattr(shift, "after_half_day_after", 0) or 0
+        if after_half_day_after and late_minutes > after_half_day_after:
+            return "after_half_day"
         if shift.half_day_after and late_minutes > shift.half_day_after:
             return "half_day"
-        if shift.late_after and late_minutes > shift.late_after:
-            return "late"
-        if late_minutes > shift.grace_time:
+        late_after = getattr(shift, "late_after", 0) or getattr(shift, "grace_time", 0) or 0
+        if late_minutes > late_after:
             return "late"
         return "on_time"
 
@@ -87,6 +89,101 @@ class AttendanceService(BaseService):
             return None
         _, shift_end_at = self._shift_window(attendance.shift_id, attendance.attendance_date)
         return shift_end_at.astimezone(timezone.utc)
+
+    def main_status_label(self, attendance: Attendance) -> str:
+        if attendance.attendance_status == "rejected":
+            return "Rejected"
+        if attendance.attendance_status == "pending":
+            return "Pending"
+
+        statuses = []
+        check_in_status = attendance.check_in_status
+        check_out_status = attendance.check_out_status
+        if check_in_status == "after_half_day":
+            statuses.append("After Half Day")
+        elif check_in_status == "half_day":
+            statuses.append("Half Day")
+        elif check_in_status == "late":
+            statuses.append("Late")
+
+        if check_out_status == "auto_punch_out":
+            statuses.append("Auto Punch Out")
+        elif check_out_status == "early_logout":
+            statuses.append("Early Logout")
+
+        return " + ".join(statuses) if statuses else "Present"
+
+    def recalculate_attendance_status(self, attendance: Attendance, save: bool = True) -> Attendance:
+        if attendance.attendance_status == "approved" and attendance.shift_id:
+            if attendance.check_in_time:
+                attendance.check_in_status = self._check_in_status(attendance.shift_id, attendance.check_in_time)
+            if attendance.check_out_time and attendance.check_out_status != "auto_punch_out":
+                attendance.check_out_status = self._check_out_status(attendance.shift_id, attendance.check_out_time)
+            if attendance.check_in_time and attendance.check_out_time:
+                attendance.total_work_minutes = max(
+                    0,
+                    int(
+                        (
+                            self._aware(attendance.check_out_time)
+                            - self._aware(attendance.check_in_time)
+                        ).total_seconds()
+                        // 60
+                    ),
+                )
+            if save:
+                attendance.save()
+        return attendance
+
+    def recalculate_existing_attendance(self, limit: int = 1000) -> int:
+        updated = 0
+        records = (
+            Attendance.objects.visible()
+            .filter(attendance_status="approved", shift_id__ne=None, check_in_time__ne=None)
+            .order_by("-attendance_date", "-created_at")
+            .limit(max(1, min(limit, 2000)))
+        )
+        for attendance in records:
+            before = (
+                attendance.check_in_status,
+                attendance.check_out_status,
+                attendance.total_work_minutes,
+            )
+            self.recalculate_attendance_status(attendance, save=False)
+            after = (
+                attendance.check_in_status,
+                attendance.check_out_status,
+                attendance.total_work_minutes,
+            )
+            if before != after:
+                attendance.save()
+                updated += 1
+        return updated
+
+    def _sync_face_record_auto_punch_out(self, attendance: Attendance, auto_out_at: datetime) -> None:
+        employee = attendance.employee_id
+        if not employee:
+            return
+        try:
+            from app.services.attendence_service import AttendanceRecord
+        except Exception:
+            return
+
+        employee_keys = [value for value in [getattr(employee, "employee_code", None), str(employee.id)] if value]
+        record = (
+            AttendanceRecord.objects(employee_id__in=employee_keys, status="PUNCHED_IN")
+            .order_by("-punch_in")
+            .first()
+        )
+        if not record:
+            return
+
+        punch_out_at = auto_out_at.replace(tzinfo=None) if auto_out_at.tzinfo else auto_out_at
+        record.punch_out = punch_out_at
+        if record.punch_in:
+            record.duration_seconds = max(0, int((punch_out_at - record.punch_in).total_seconds()))
+        record.status = "PUNCHED_OUT"
+        record.updated_at = datetime.utcnow()
+        record.save()
 
     def auto_punch_out_overdue(self, now: datetime | None = None) -> int:
         now_utc = self._aware(now or self.utc_now()).astimezone(timezone.utc)
@@ -111,8 +208,60 @@ class AttendanceService(BaseService):
                 start = self._aware(attendance.check_in_time)
                 attendance.total_work_minutes = max(0, int((auto_out_at - start).total_seconds() // 60))
             attendance.save()
+            self._sync_face_record_auto_punch_out(attendance, auto_out_at)
             updated += 1
         return updated
+
+    def sync_missing_face_attendance_records(self, limit: int = 500) -> int:
+        try:
+            from app.services.attendence_service import AttendanceRecord
+        except Exception:
+            return 0
+
+        synced = 0
+        records = AttendanceRecord.objects.order_by("-punch_in").limit(max(1, min(limit, 1000)))
+        for record in records:
+            employee = Employee.objects(employee_code=record.employee_id, is_active=True).first()
+            if not employee:
+                try:
+                    employee = Employee.objects(id=record.employee_id, is_active=True).first()
+                except Exception:
+                    employee = None
+            if not employee or not employee.branch_id or not record.punch_in:
+                continue
+
+            attendance = Attendance.objects(
+                employee_id=employee,
+                check_in_time=record.punch_in,
+                is_active=True,
+            ).first()
+            if not attendance:
+                attendance = Attendance(
+                    tenant_id=employee.tenant_id,
+                    company_id=employee.company_id,
+                    employee_id=employee,
+                    branch_id=employee.branch_id,
+                    shift_id=employee.shift_id,
+                    attendance_date=(self.to_local(record.punch_in) or record.punch_in).date(),
+                    check_in_time=record.punch_in,
+                    latitude=employee.branch_id.latitude,
+                    longitude=employee.branch_id.longitude,
+                    distance_from_office=0,
+                    device_info="face-attendance-api",
+                    attendance_status="approved",
+                    check_in_status=self._check_in_status(employee.shift_id, record.punch_in)
+                    if employee.shift_id
+                    else "pending",
+                )
+                synced += 1
+
+            if record.punch_out and not attendance.check_out_time:
+                attendance.check_out_time = record.punch_out
+                synced += 1
+
+            self.recalculate_attendance_status(attendance, save=False)
+            attendance.save()
+        return synced
 
     def today_for_employee(self, user: User) -> dict:
         employee = self._employee_for_user(user)
@@ -172,6 +321,7 @@ class AttendanceService(BaseService):
             check_in_status=self._check_in_status(employee.shift_id, now) if approved and employee.shift_id else "pending",
             rejection_reason=None if approved else f"Outside allowed radius of {branch.allowed_radius} meters",
         )
+        self.recalculate_attendance_status(attendance, save=False)
         attendance.save()
         return attendance
 
@@ -211,6 +361,7 @@ class AttendanceService(BaseService):
             attendance.total_work_minutes = max(0, int((self._aware(attendance.check_out_time) - self._aware(attendance.check_in_time)).total_seconds() // 60))
         if attendance.shift_id:
             attendance.check_out_status = self._check_out_status(attendance.shift_id, attendance.check_out_time)
+        self.recalculate_attendance_status(attendance, save=False)
         attendance.device_info = data.get("device_info") or attendance.device_info
         attendance.browser_fingerprint = data.get("browser_fingerprint") or attendance.browser_fingerprint
         attendance.save()

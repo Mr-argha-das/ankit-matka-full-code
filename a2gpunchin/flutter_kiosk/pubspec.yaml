@@ -10,12 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   camera: ^0.11.0+2
-  cupertino_icons: ^1.0.8
-  face_detection_tflite: ^6.3.0
   flutter_tts: ^4.2.2
   fluttertoast: ^8.2.12
   http: ^1.2.2
-  path_provider: ^2.1.4
+  http_parser: ^4.0.2
   shared_preferences: ^2.3.2
 
 dev_dependencies:

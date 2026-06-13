@@ -12,5 +12,6 @@ class Shift(BaseDocument):
     grace_time = IntField(default=0)
     late_after = IntField(default=0)
     half_day_after = IntField(default=0)
+    after_half_day_after = IntField(default=0)
     early_logout_before = IntField(default=0)
     is_night_shift = BooleanField(default=False)

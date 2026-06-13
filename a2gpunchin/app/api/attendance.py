@@ -61,6 +61,8 @@ def _attendance_row(item) -> dict:
             in_status = service._check_in_status(item.shift_id, item.check_in_time)
         if item.check_out_time and item.check_out_status != "auto_punch_out":
             out_status = service._check_out_status(item.shift_id, item.check_out_time)
+    item.check_in_status = in_status
+    item.check_out_status = out_status
     return {
         "id": str(item.id),
         "employee": employee_name,
@@ -69,6 +71,7 @@ def _attendance_row(item) -> dict:
         "check_in_time": _time_label(item.check_in_time),
         "check_out_time": _time_label(item.check_out_time),
         "status": _status_label(item.attendance_status),
+        "main_status": service.main_status_label(item),
         "in_status": _status_label(in_status),
         "out_status": _status_label(out_status),
         "work_minutes": _duration_label(_work_minutes(item)),
@@ -87,7 +90,9 @@ def list_attendance(
     status: str | None = None,
     _=Depends(require_permissions("attendance:read")),
 ):
+    service.sync_missing_face_attendance_records()
     service.auto_punch_out_overdue()
+    service.recalculate_existing_attendance()
     filters = {}
     if start_date:
         filters["attendance_date__gte"] = start_date

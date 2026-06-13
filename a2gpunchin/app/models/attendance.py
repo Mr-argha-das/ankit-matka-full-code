@@ -22,7 +22,7 @@ class Attendance(BaseDocument):
     browser_fingerprint = StringField()
     ip_address = StringField()
     attendance_status = StringField(default="pending", choices=("approved", "rejected", "pending"))
-    check_in_status = StringField(default="pending", choices=("pending", "on_time", "late", "half_day"))
+    check_in_status = StringField(default="pending", choices=("pending", "on_time", "late", "half_day", "after_half_day"))
     check_out_status = StringField(default="pending", choices=("pending", "normal", "early_logout", "auto_punch_out"))
     total_work_minutes = IntField(default=0)
     rejection_reason = StringField()

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
@@ -9,7 +8,6 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
-import 'face_embedding_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,11 +66,10 @@ class KioskShell extends StatefulWidget {
 
 class _KioskShellState extends State<KioskShell> {
   final _baseUrlController =
-      TextEditingController(text: 'https://b3a8-103-87-58-12.ngrok-free.app');
+      TextEditingController(text: 'https://hrms.a2groups.org');
   final _branchCodeController = TextEditingController(text: 'AHIT');
   final _pinController = TextEditingController(text: '1234');
   final _employeeCodeController = TextEditingController();
-  final _faceService = FaceEmbeddingService();
   final _tts = FlutterTts();
 
   CameraController? _camera;
@@ -80,18 +77,11 @@ class _KioskShellState extends State<KioskShell> {
   KioskSession? _session;
   KioskPage _page = KioskPage.settings;
   bool _busy = false;
-  bool _autoScan = false;
   String _message = 'Connect kiosk from settings.';
-  Timer? _scanTimer;
-  Timer? _cooldownTimer;
-  DateTime? _cooldownUntil;
 
   @override
   void initState() {
     super.initState();
-    if (widget.enableFaceService) {
-      _faceService.load();
-    }
     _configureVoice();
     _restore();
     _initCamera();
@@ -141,11 +131,6 @@ class _KioskShellState extends State<KioskShell> {
 
   void _openPage(KioskPage page) {
     setState(() => _page = page);
-    if (page == KioskPage.scanner && _session != null) {
-      _startAutoScan();
-    } else {
-      _stopAutoScan();
-    }
   }
 
   String _normalizedBaseUrl() {
@@ -186,7 +171,6 @@ class _KioskShellState extends State<KioskShell> {
         _toast('Kiosk ready at ${session.branchName}', success: true);
         await _speak('Kiosk ready');
       }
-      _startAutoScan();
     } catch (error) {
       _toast(error.toString(), success: false);
       _setMessage(error.toString());
@@ -195,67 +179,17 @@ class _KioskShellState extends State<KioskShell> {
     }
   }
 
-  void _startAutoScan() {
-    if (_autoScan) return;
-    _autoScan = true;
-    _scanTimer?.cancel();
-    _scanTimer =
-        Timer.periodic(const Duration(seconds: 3), (_) => _scanAndPunch());
-    Future<void>.delayed(const Duration(milliseconds: 600), _scanAndPunch);
-  }
-
-  void _stopAutoScan() {
-    _autoScan = false;
-    _scanTimer?.cancel();
-    _scanTimer = null;
-  }
-
-  int get _cooldownRemainingSeconds {
-    final until = _cooldownUntil;
-    if (until == null) return 0;
-    final remaining = until.difference(DateTime.now()).inSeconds + 1;
-    return remaining > 0 ? remaining : 0;
-  }
-
-  bool get _inScanCooldown => _cooldownRemainingSeconds > 0;
-
-  void _startScanCooldown(String successMessage) {
-    _cooldownTimer?.cancel();
-    _cooldownUntil = DateTime.now().add(const Duration(seconds: 10));
-    void tick() {
-      final remaining = _cooldownRemainingSeconds;
-      if (remaining <= 0) {
-        _cooldownTimer?.cancel();
-        _cooldownTimer = null;
-        _cooldownUntil = null;
-        _setMessage('Ready for next face scan.');
-        return;
-      }
-      _setMessage('$successMessage Next scan in ${remaining}s.');
-    }
-
-    tick();
-    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
-  }
-
-  Future<List<double>> _captureEmbedding() async {
+  Future<Uint8List> _captureImageBytes() async {
     final camera = _camera;
     if (camera == null || !camera.value.isInitialized) {
       throw Exception('Camera is not ready.');
     }
-    await _faceService.load();
     final file = await camera.takePicture();
-    final bytes = await File(file.path).readAsBytes();
-    return _faceService.embeddingFromImageBytes(bytes);
+    return File(file.path).readAsBytes();
   }
 
   Future<void> _scanAndPunch() async {
-    if (!_autoScan || _busy || _page != KioskPage.scanner) return;
-    if (_inScanCooldown) {
-      _setMessage(
-          'Please wait ${_cooldownRemainingSeconds}s before next face scan.');
-      return;
-    }
+    if (_busy || _page != KioskPage.scanner) return;
     final client = _client;
     final session = _session;
     if (client == null || session == null) {
@@ -267,22 +201,29 @@ class _KioskShellState extends State<KioskShell> {
       _message = 'Scanning face...';
     });
     try {
-      final embedding = await _captureEmbedding();
+      final imageBytes = await _captureImageBytes();
       final result = await client.facePunch(
         branchId: session.branchId,
         kioskPin: _pinController.text.trim(),
         action: 'auto',
-        faceEmbedding: embedding,
+        imageBytes: imageBytes,
       );
+      if (result['success'] == false || result['recognized'] == false) {
+        final message =
+            result['message']?.toString() ?? 'Face not recognized.';
+        _toast(message, success: false);
+        _setMessage(message);
+        return;
+      }
       final name = result['employee_name']?.toString() ?? 'Employee';
       final firstName = name.split(' ').first;
-      final didPunchOut = result['action'] == 'punch_out';
+      final didPunchOut = result['action']?.toString().toUpperCase() == 'PUNCH_OUT';
       final message = didPunchOut
           ? 'Punch out successful. Thank you $firstName.'
           : 'Punch in successful. Thank you $firstName.';
       _toast(message, success: true);
       await _speak(message);
-      _startScanCooldown(message);
+      _setMessage(message);
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (!message.toLowerCase().contains('no face')) {
@@ -311,14 +252,14 @@ class _KioskShellState extends State<KioskShell> {
       _message = 'Capturing enrollment face...';
     });
     try {
-      final embedding = await _captureEmbedding();
+      final imageBytes = await _captureImageBytes();
       final result = await client.enrollFace(
         branchId: session.branchId,
         kioskPin: _pinController.text.trim(),
         employeeCode: employeeCode,
-        faceEmbedding: embedding,
+        imageBytes: imageBytes,
       );
-      final name = result['employee_name']?.toString() ?? employeeCode;
+      final name = result['employee_name']?.toString() ?? result['name']?.toString() ?? employeeCode;
       _employeeCodeController.clear();
       _toast('Face enrolled for $name', success: true);
       await _speak('Face enrolled for ${name.split(' ').first}');
@@ -350,10 +291,7 @@ class _KioskShellState extends State<KioskShell> {
 
   @override
   void dispose() {
-    _stopAutoScan();
-    _cooldownTimer?.cancel();
     _camera?.dispose();
-    _faceService.dispose();
     _tts.stop();
     _baseUrlController.dispose();
     _branchCodeController.dispose();
@@ -517,9 +455,15 @@ class _NavItem extends StatelessWidget {
             children: [
               Icon(icon, color: Colors.white, size: 22),
               const SizedBox(width: 12),
-              Text(label,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w800)),
+                      color: Colors.white, fontWeight: FontWeight.w800),
+                ),
+              ),
             ],
           ),
         ),
@@ -595,7 +539,7 @@ class _ScannerPage extends StatelessWidget {
                             'Start kiosk from settings'),
                     const Spacer(),
                     const _GlassChip(
-                        icon: Icons.autorenew, label: 'Auto Punch'),
+                        icon: Icons.touch_app, label: 'Manual Start'),
                   ],
                 ),
                 const Spacer(),
@@ -621,6 +565,19 @@ class _ScannerPage extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                SizedBox(
+                  height: 58,
+                  child: FilledButton.icon(
+                    onPressed: state._busy ? null : state._scanAndPunch,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text(
+                      'Start Punch',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 _MessageBanner(message: state._message, busy: state._busy),
               ],
             ),
@@ -821,53 +778,55 @@ class _SettingsPage extends StatelessWidget {
       title: 'Kiosk Settings',
       subtitle:
           'Start this TL phone from any kiosk branch. After that, any enrolled employee in the company can punch here.',
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: _SurfaceCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('Connection',
-                    style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: state._baseUrlController,
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.next,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Backend URL',
-                    hintText: 'http://192.168.1.10:8001',
-                    helperText:
-                        'Use your server IP and port. http:// is added automatically if missing.',
-                    prefixIcon: Icon(Icons.link),
+      child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: _SurfaceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Connection',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: state._baseUrlController,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Backend URL',
+                      hintText: 'http://192.168.1.10:8001',
+                      helperText:
+                          'Use your server IP and port. http:// is added automatically if missing.',
+                      prefixIcon: Icon(Icons.link),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: state._branchCodeController,
-                    decoration: const InputDecoration(
-                        labelText: 'Branch Code',
-                        prefixIcon: Icon(Icons.apartment))),
-                const SizedBox(height: 12),
-                TextField(
-                    controller: state._pinController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                        labelText: 'Kiosk PIN', prefixIcon: Icon(Icons.pin))),
-                const SizedBox(height: 18),
-                FilledButton.icon(
-                  onPressed: state._busy ? null : state._startKiosk,
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Start Kiosk'),
-                ),
-                const SizedBox(height: 14),
-                Text(state._message,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-              ],
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: state._branchCodeController,
+                      decoration: const InputDecoration(
+                          labelText: 'Branch Code',
+                          prefixIcon: Icon(Icons.apartment))),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: state._pinController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Kiosk PIN', prefixIcon: Icon(Icons.pin))),
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    onPressed: state._busy ? null : state._startKiosk,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Start Kiosk'),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(state._message,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
             ),
           ),
         ),

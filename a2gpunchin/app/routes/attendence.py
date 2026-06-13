@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 
 from app.services.attendence_service import AttendanceService
 
@@ -55,6 +55,21 @@ async def punch_by_face(image: Annotated[UploadFile, File(...)]):
     return get_attendance_service().recognize_and_punch(image_bytes)
 
 
+@router.get("/employees/search")
+async def search_employees_for_enrollment(
+    branch_id: str,
+    kiosk_pin: str,
+    search: str | None = None,
+    limit: int = Query(100, ge=1, le=500),
+):
+    return get_attendance_service().search_employees(
+        branch_id=branch_id,
+        kiosk_pin=kiosk_pin,
+        search=search,
+        limit=limit,
+    )
+
+
 @router.get("/employees/{employee_id}/image")
 async def employee_image(employee_id: str):
     image_bytes, content_type = get_attendance_service().get_employee_image(employee_id)
@@ -66,4 +81,3 @@ async def employee_attendance_records(employee_id: str, limit: int = 20):
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit 1 se 100 ke beech hona chahiye.")
     return get_attendance_service().get_employee_records(employee_id, limit)
-
