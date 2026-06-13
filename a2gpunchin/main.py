@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,10 +21,31 @@ from app.api import (
     subscriptions,
     web,
 )
+
 from app.core.config import settings
 from app.core.database import connect_database
 from app.middleware.audit import AuditMiddleware
 from app.middleware.tenant import TenantMiddleware
+
+from app.models.face_engine import FaceEngine
+from app.routes.attendence import router as face_attendance_router
+from app.routes.attendence import set_attendance_service
+from app.services.attendence_service import AttendanceService
+
+
+face_engine = FaceEngine(
+    index_dir=getattr(settings, "face_index_dir", "./data/face_index"),
+    threshold=getattr(settings, "similarity_threshold", 0.45),
+    gpu_id=getattr(settings, "gpu_id", -1),
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    connect_database()
+    face_engine.initialize()
+    set_attendance_service(AttendanceService(face_engine))
+    yield
 
 
 def create_app() -> FastAPI:
@@ -30,8 +53,9 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version="1.0.0",
         description="Multi-tenant SaaS GPS attendance management system",
+        lifespan=lifespan,
     )
-    connect_database()
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -39,9 +63,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
     app.add_middleware(AuditMiddleware)
     app.add_middleware(TenantMiddleware)
+
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
     app.include_router(web.router)
     app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
     app.include_router(companies.router, prefix="/api/companies", tags=["Companies"])
@@ -55,15 +82,36 @@ def create_app() -> FastAPI:
     app.include_router(shifts.router, prefix="/api/shifts", tags=["Shifts"])
     app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
     app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+
+    app.include_router(face_attendance_router)
+
     return app
 
 
 app = create_app()
 
 
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "model_loaded": face_engine.is_ready,
+        "total_indexed_faces": face_engine.total_faces(),
+        "similarity_threshold": getattr(settings, "similarity_threshold", 0.45),
+    }
+
+
 @app.exception_handler(404)
 async def not_found(request: Request, exc):
     if request.url.path.startswith("/api/"):
-        return JSONResponse({"detail": "API endpoint not found. Check backend URL and route."}, status_code=404)
+        return JSONResponse(
+            {"detail": "API endpoint not found. Check backend URL and route."},
+            status_code=404,
+        )
+
     templates = Jinja2Templates(directory="app/templates")
-    return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    return templates.TemplateResponse(
+        "404.html",
+        {"request": request},
+        status_code=404,
+    )
