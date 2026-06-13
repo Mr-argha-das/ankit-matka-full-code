@@ -181,10 +181,10 @@ async function loadSelectOptions() {
   const selects = document.querySelectorAll("select.option-loader");
   await Promise.all(Array.from(selects).map(async (select) => {
     try {
-      const result = await apiFetch(select.dataset.source);
+      const items = await loadOptionItems(select.dataset.source, select.dataset.loadAll === "true");
       const placeholder = select.querySelector("option[value='']")?.textContent || "Select";
       select.innerHTML = `<option value="">${placeholder}</option>`;
-      result.items.forEach((item) => {
+      items.forEach((item) => {
         const option = document.createElement("option");
         option.value = item.id;
         option.textContent = optionLabel(item, select.dataset.kind);
@@ -193,6 +193,9 @@ async function loadSelectOptions() {
         }
         select.appendChild(option);
       });
+      if (select.dataset.defaultValue !== undefined) {
+        select.value = select.dataset.defaultValue;
+      }
     } catch (error) {
       if (select.dataset.kind === "company") {
         const placeholder = select.querySelector("option[value='']")?.textContent || "Use current company";
@@ -204,12 +207,59 @@ async function loadSelectOptions() {
   }));
 }
 
+async function loadDatalistOptions() {
+  const inputs = document.querySelectorAll("input.option-datalist");
+  await Promise.all(Array.from(inputs).map(async (input) => {
+    try {
+      const list = document.getElementById(input.getAttribute("list"));
+      if (!list) return;
+      const items = await loadOptionItems(input.dataset.source, input.dataset.loadAll === "true");
+      const labelToId = {};
+      list.innerHTML = "";
+      items.forEach((item) => {
+        const label = optionLabel(item, input.dataset.kind);
+        labelToId[label] = item.id;
+        const option = document.createElement("option");
+        option.value = label;
+        list.appendChild(option);
+      });
+      input.dataset.labelToId = JSON.stringify(labelToId);
+    } catch (error) {
+      input.placeholder = "Unable to load candidates";
+    }
+  }));
+}
+
+async function loadOptionItems(source, loadAll = false) {
+  if (!loadAll) {
+    const result = await apiFetch(source);
+    return result.items || [];
+  }
+  const items = [];
+  let page = 1;
+  let total = 0;
+  do {
+    const separator = source.includes("?") ? "&" : "?";
+    const result = await apiFetch(`${source}${separator}page=${page}&page_size=100`);
+    items.push(...(result.items || []));
+    total = Number(result.total || items.length);
+    page += 1;
+  } while (items.length < total);
+  return items;
+}
+
 document.addEventListener("change", (event) => {
   if (event.target.matches("select.company-select")) {
     const selected = event.target.selectedOptions[0];
     const form = event.target.closest("form");
     const tenantInput = form?.querySelector("input[name='tenant_id']");
     if (tenantInput) tenantInput.value = selected?.dataset.tenantId || "";
+  }
+  if (event.target.matches("input.option-datalist")) {
+    const hidden = document.querySelector(event.target.dataset.hiddenTarget);
+    if (!hidden) return;
+    const labelToId = JSON.parse(event.target.dataset.labelToId || "{}");
+    hidden.value = labelToId[event.target.value] || "";
   }
 });
 
@@ -267,6 +317,14 @@ document.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("reset", (event) => {
+  if (event.target.classList.contains("report-export-form")) {
+    window.setTimeout(() => {
+      event.target.querySelectorAll("input[type='hidden']").forEach((input) => {
+        input.value = "";
+      });
+    }, 0);
+    return;
+  }
   if (!event.target.classList.contains("table-filter-form")) return;
   window.setTimeout(() => {
     const table = document.querySelector(event.target.dataset.target);
@@ -286,6 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   loadSelectOptions();
+  loadDatalistOptions();
   const summary = document.getElementById("myAttendanceSummary");
   if (summary) {
     apiFetch("/api/attendance/me/today").then((data) => {

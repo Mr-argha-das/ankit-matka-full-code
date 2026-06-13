@@ -1,20 +1,20 @@
 :root {
-  --bg: #0e0f14;
-  --surface: #16181f;
-  --surface-soft: #1e2029;
-  --ink: #f0f0f2;
-  --muted: #8b8d9a;
-  --line: rgba(255,255,255,.07);
-  --line-soft: rgba(255,255,255,.13);
-  --nav: #16181f;
-  --nav-2: #1e2029;
-  --primary: #7c6af7;
-  --primary-hover: #a896ff;
-  --teal: #3ecf8e;
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --ink: #101828;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --line-soft: #d0d5dd;
+  --nav: #ffffff;
+  --nav-2: #f2f4f7;
+  --primary: #6941c6;
+  --primary-hover: #7f56d9;
+  --teal: #039855;
   --sky: #38bdf8;
-  --amber: #f5b244;
-  --red: #f26b6b;
-  --shadow: none;
+  --amber: #dc6803;
+  --red: #d92d20;
+  --shadow: 0 10px 30px rgba(16, 24, 40, .06);
 }
 
 * {
@@ -1690,4 +1690,345 @@ a,
     padding-left: 16px;
     padding-right: 16px;
   }
+}
+
+/* Premium white enterprise theme */
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+a,
+.panel-title a,
+.card-link {
+  color: var(--primary);
+}
+
+.app-shell {
+  grid-template-columns: 248px minmax(0, 1fr);
+}
+
+.main-panel {
+  background: var(--bg);
+}
+
+.sidebar {
+  background: var(--nav);
+  border-right: 1px solid var(--line);
+  color: var(--ink);
+  padding: 24px 14px;
+}
+
+.brand {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+  padding: 0 10px 22px;
+}
+
+.brand-mark {
+  background: #f4ebff;
+  border: 1px solid #e9d7fe;
+  border-radius: 10px;
+  box-shadow: none;
+  color: var(--primary);
+}
+
+.brand strong,
+.topbar h1,
+.module-head h2,
+.dashboard-hero h2,
+.page-head h2,
+.metric strong,
+.enrollment-meter__value,
+.ops-summary strong,
+.panel-title h3,
+.report-card h3,
+.settings-panel h3,
+.login-panel h1 {
+  color: var(--ink);
+}
+
+.brand small,
+.nav-section,
+.sidebar .nav-link,
+.topbar p,
+.text-muted {
+  color: var(--muted) !important;
+}
+
+.sidebar .nav-link {
+  border: 1px solid transparent;
+  font-weight: 650;
+}
+
+.sidebar .nav-link:hover {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.sidebar .nav-link.active {
+  background: #f4ebff;
+  border-color: #e9d7fe;
+  box-shadow: none;
+  color: var(--primary);
+}
+
+.topbar {
+  background: rgba(255, 255, 255, .92);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+}
+
+.content {
+  background: var(--bg);
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--primary);
+  --bs-btn-border-color: var(--primary);
+  --bs-btn-color: #fff;
+  --bs-btn-hover-bg: var(--primary-hover);
+  --bs-btn-hover-border-color: var(--primary-hover);
+  --bs-btn-hover-color: #fff;
+}
+
+.btn-outline-primary,
+.btn-outline-secondary {
+  --bs-btn-bg: #fff;
+  --bs-btn-color: #344054;
+  --bs-btn-border-color: var(--line-soft);
+  --bs-btn-hover-bg: #f9fafb;
+  --bs-btn-hover-border-color: #98a2b3;
+  --bs-btn-hover-color: var(--ink);
+}
+
+.btn-secondary {
+  --bs-btn-bg: #f2f4f7;
+  --bs-btn-border-color: #eaecf0;
+  --bs-btn-color: #344054;
+  --bs-btn-hover-bg: #e4e7ec;
+  --bs-btn-hover-border-color: #d0d5dd;
+  --bs-btn-hover-color: #101828;
+}
+
+.eyebrow,
+.dashboard-date-label,
+.metric span,
+.insight-strip span,
+.ops-summary span {
+  color: #667085;
+}
+
+.module-head,
+.dashboard-hero,
+.dashboard-filterbar,
+.insight-strip div,
+.panel,
+.metric,
+.table,
+.table-pager,
+.login-panel,
+.correction-action-bar,
+.manual-punch-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.manual-punch-card,
+.steps div,
+.settings-list div,
+.ops-summary div,
+.action-item,
+.empty-state {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+
+.module-head p,
+.dashboard-hero p,
+.report-card p,
+.correction-panel p,
+.manual-punch-card p,
+.steps p,
+.kiosk-card p,
+.table-page-summary,
+.table-page-count,
+.action-item span,
+.branch-health-item span,
+.settings-list span,
+.metric small {
+  color: var(--muted);
+}
+
+.metric-success,
+.metric-warning,
+.metric-danger,
+.metric.accent,
+.report-card-muted {
+  background: var(--surface);
+}
+
+.metric-success strong,
+.metric.accent strong {
+  color: var(--teal);
+}
+
+.metric-warning strong {
+  color: var(--amber);
+}
+
+.metric-danger strong {
+  color: var(--red);
+}
+
+.enrollment-meter .progress,
+.branch-health-item__bar,
+.bar-track,
+.progress {
+  background: #eaecf0;
+}
+
+.enrollment-meter .progress-bar {
+  background: var(--primary);
+}
+
+.branch-health-item {
+  border-bottom-color: var(--line);
+}
+
+.action-item {
+  color: var(--ink);
+}
+
+.action-item:hover {
+  background: #eef2ff;
+  color: var(--ink);
+}
+
+.status-badge-success {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.status-badge-warning {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.status-badge-danger {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.status-badge-neutral {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.map-panel,
+.leaflet-container {
+  background: #eef2f6;
+}
+
+.table {
+  --bs-table-bg: #fff;
+  --bs-table-color: #344054;
+  --bs-table-striped-bg: #f9fafb;
+  --bs-table-striped-color: #344054;
+  --bs-table-border-color: var(--line);
+  color: #344054;
+}
+
+.table > :not(caption) > * > * {
+  border-bottom-color: var(--line);
+}
+
+.table thead th {
+  background: #f9fafb;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.table tbody td {
+  background: transparent;
+  color: #475467;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-bg-type: #fcfcfd;
+}
+
+.form-label {
+  color: #344054;
+}
+
+.form-control,
+.form-select {
+  background-color: #fff;
+  border-color: var(--line-soft);
+  color: var(--ink);
+}
+
+.form-control::placeholder {
+  color: #98a2b3;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: #fff;
+  border-color: var(--primary-hover);
+  color: var(--ink);
+  box-shadow: 0 0 0 4px rgba(127, 86, 217, .14);
+}
+
+.form-select option {
+  background: #fff;
+  color: var(--ink);
+}
+
+.modal-content {
+  background: #fff;
+  border-color: var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(16, 24, 40, .18);
+}
+
+.modal-header,
+.modal-footer {
+  background: #fff;
+  border-color: var(--line);
+}
+
+.modal-title {
+  color: var(--ink);
+}
+
+.btn-close {
+  filter: none;
+}
+
+.alert-info {
+  background: #eff8ff;
+  border-color: #b2ddff;
+  color: #175cd3;
+}
+
+.login-page {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(127, 86, 217, .14), transparent 30%),
+    radial-gradient(circle at 90% 8%, rgba(3, 152, 85, .09), transparent 28%),
+    var(--bg);
+}
+
+.login-panel {
+  background: #fff;
+}
+
+.login-panel h1 {
+  color: var(--primary);
 }

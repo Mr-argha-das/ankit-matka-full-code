@@ -2,8 +2,10 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import Response
+from mongoengine import Q
 
 from app.models.attendance import Attendance
+from app.models.employee import Employee
 from app.services.attendance import AttendanceService
 from app.utils.reports import rows_to_csv, rows_to_excel, rows_to_pdf
 
@@ -50,12 +52,38 @@ class ReportService:
             return "On Time"
         return ""
 
-    def attendance_rows(self, start_date: date | None = None, end_date: date | None = None):
+    def attendance_rows(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        employee_id: str | None = None,
+        candidate_search: str | None = None,
+        department_id: str | None = None,
+    ):
         query = Attendance.objects.visible()
         if start_date:
             query = query.filter(attendance_date__gte=start_date)
         if end_date:
             query = query.filter(attendance_date__lte=end_date)
+        employee_id = employee_id.strip() if employee_id else None
+        candidate_search = candidate_search.strip() if candidate_search else None
+        department_id = department_id.strip() if department_id else None
+        if employee_id:
+            query = query.filter(employee_id=employee_id)
+        elif department_id or candidate_search:
+            employee_query = Employee.objects.visible()
+            if department_id:
+                employee_query = employee_query.filter(department_id=department_id)
+            if candidate_search:
+                employee_query = employee_query.filter(
+                    Q(employee_code__icontains=candidate_search)
+                    | Q(first_name__icontains=candidate_search)
+                    | Q(last_name__icontains=candidate_search)
+                    | Q(email__icontains=candidate_search)
+                    | Q(phone__icontains=candidate_search)
+                )
+            employees = list(employee_query)
+            query = query.filter(employee_id__in=employees)
         headers = ["Employee ID", "Employee Name", "Date", "Punch In", "Punch Out", "Work Time (H:M)", "Status", "Sub Status"]
         rows: list[list[Any]] = []
         for item in query.order_by("-attendance_date"):
@@ -77,9 +105,23 @@ class ReportService:
             )
         return headers, rows
 
-    def export_attendance(self, fmt: str, start_date: date | None = None, end_date: date | None = None) -> Response:
+    def export_attendance(
+        self,
+        fmt: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        employee_id: str | None = None,
+        candidate_search: str | None = None,
+        department_id: str | None = None,
+    ) -> Response:
         self.attendance_service.auto_punch_out_overdue()
-        headers, rows = self.attendance_rows(start_date, end_date)
+        headers, rows = self.attendance_rows(
+            start_date=start_date,
+            end_date=end_date,
+            employee_id=employee_id,
+            candidate_search=candidate_search,
+            department_id=department_id,
+        )
         if fmt == "xlsx":
             return Response(rows_to_excel(headers, rows), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         if fmt == "pdf":

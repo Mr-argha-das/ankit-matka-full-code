@@ -30,7 +30,7 @@ class AttendanceKioskApp extends StatelessWidget {
     const primary = Color(0xFF21185F);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'KioskAttend',
+      title: 'rMatrix',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: primary,
@@ -414,7 +414,7 @@ class _Sidebar extends StatelessWidget {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14)),
                 child: const Center(
-                    child: Text('K',
+                    child: Text('RM',
                         style: TextStyle(
                             fontWeight: FontWeight.w900,
                             color: Color(0xFF21185F)))),
@@ -424,7 +424,7 @@ class _Sidebar extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('KioskAttend',
+                    Text('rMatrix',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,

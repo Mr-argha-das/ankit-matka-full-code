@@ -10,7 +10,7 @@ load_dotenv(".env", override=True)
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "Attendance SaaS"
+    app_name: str = "rMatrix"
     environment: str = "development"
     debug: bool = True
     secret_key: str = Field(default="change-me-in-production", min_length=16)
