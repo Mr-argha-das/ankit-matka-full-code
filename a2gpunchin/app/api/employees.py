@@ -6,6 +6,7 @@ from app.models.employee import Employee
 from app.repositories.base import BaseRepository
 from app.schemas.employee import EmployeeFaceEnroll
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
+from app.services.access_control import ACCESS_LEVEL_LABELS, normalize_access_level
 from app.services.catalog import EmployeeService
 from app.utils.serializers import document_to_dict
 
@@ -48,6 +49,7 @@ def _employee_row(employee: Employee) -> dict:
         "aadhar_number": employee.aadhar_number or "-",
         "pan_number": employee.pan_number or "-",
         "face": "Enrolled" if employee.face_enrolled else "Not Enrolled",
+        "access": ACCESS_LEVEL_LABELS.get(normalize_access_level(getattr(employee.user_id, "access_level", None)), "Employee Self") if employee.user_id else "No Access",
         "status": employee.status.title() if employee.status else "-",
     }
 

@@ -13,6 +13,7 @@ class User(BaseDocument):
     last_name = StringField(required=True)
     phone = StringField()
     roles = ListField(ReferenceField(Role))
+    access_level = StringField(default="employee", choices=("admin", "manager", "tl", "employee"))
     is_super_admin = BooleanField(default=False)
     is_email_verified = BooleanField(default=False)
     status = StringField(default="active", choices=("active", "inactive", "locked"))

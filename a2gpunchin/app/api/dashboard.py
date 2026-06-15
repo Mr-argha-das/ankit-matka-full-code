@@ -8,6 +8,8 @@ from app.models.branch import Branch
 from app.models.employee import Employee
 from app.models.leave import Leave
 from app.models.shift import Shift
+from app.models.user import User
+from app.services.access_control import scoped_employees_for_user
 from app.services.attendance import AttendanceService
 
 router = APIRouter()
@@ -39,16 +41,21 @@ def _branch_label(branch: Branch | None) -> str:
 
 
 @router.get("/summary")
-def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
+def dashboard_summary(user: User = Depends(require_permissions("attendance:read"))):
     attendance_service.sync_missing_face_attendance_records()
     attendance_service.auto_punch_out_overdue()
     attendance_service.recalculate_existing_attendance()
     today = date.today()
 
     employees = Employee.objects.visible().filter(status="active")
+    scoped_employees = scoped_employees_for_user(user)
+    if scoped_employees is not None:
+        employees = employees.filter(id__in=[employee.id for employee in scoped_employees])
     branches = Branch.objects.visible()
     shifts = Shift.objects.visible()
     today_attendance = Attendance.objects.visible().filter(attendance_date=today)
+    if scoped_employees is not None:
+        today_attendance = today_attendance.filter(employee_id__in=scoped_employees)
 
     total_employees = employees.count()
     total_branches = branches.count()
@@ -59,7 +66,10 @@ def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
     late_today = today_attendance.filter(check_in_status__in=["late", "half_day", "after_half_day"]).count()
     missing_checkout = today_attendance.filter(check_in_time__ne=None, check_out_time=None).count()
     absent_today = max(total_employees - present_today, 0)
-    pending_leave = Leave.objects.visible().filter(status__in=["pending_manager", "pending_hr"]).count()
+    leave_query = Leave.objects.visible().filter(status__in=["pending_manager", "pending_hr"])
+    if scoped_employees is not None:
+        leave_query = leave_query.filter(employee_id__in=scoped_employees)
+    pending_leave = leave_query.count()
 
     active_branch_ids = {
         str(item.branch_id.id)
@@ -71,6 +81,8 @@ def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
     for offset in range(6, -1, -1):
         day = today - timedelta(days=offset)
         records = Attendance.objects.visible().filter(attendance_date=day)
+        if scoped_employees is not None:
+            records = records.filter(employee_id__in=scoped_employees)
         trend.append(
             {
                 "label": day.strftime("%a"),
@@ -112,8 +124,11 @@ def dashboard_summary(_=Depends(require_permissions("attendance:read"))):
                 ]
             },
         )
-        .order_by("-created_at")[:6]
+        .order_by("-created_at")
     )
+    if scoped_employees is not None:
+        exception_query = exception_query.filter(employee_id__in=scoped_employees)
+    exception_query = exception_query[:6]
     for item in exception_query:
         exceptions.append(
             {

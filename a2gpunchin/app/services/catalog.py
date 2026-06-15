@@ -9,6 +9,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.repositories.base import BaseRepository
 from app.core.security import hash_password
+from app.services.access_control import scoped_employees_for_user, sync_employee_user
 from app.services.base import BaseService
 
 
@@ -98,7 +99,17 @@ class EmployeeService(BaseService):
     def __init__(self):
         super().__init__(BaseRepository(Employee))
 
+    def _as_bool(self, value) -> bool:
+        if isinstance(value, bool):
+            return value
+        return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
     def list(self, page: int = 1, page_size: int = 20, search: str | None = None, sort: str = "-created_at", **filters):
+        current_user = filters.pop("current_user", None)
+        if current_user:
+            scoped_employees = scoped_employees_for_user(current_user)
+            if scoped_employees is not None:
+                filters["id__in"] = [employee.id for employee in scoped_employees]
         items, total = super().list(page=page, page_size=page_size, search=search, sort=sort, **filters)
         if not search or total or " " not in search.strip():
             return items, total
@@ -112,14 +123,26 @@ class EmployeeService(BaseService):
         return list(query.order_by(sort).skip((page - 1) * page_size).limit(page_size)), total
 
     def create(self, data: dict):
+        portal_access = self._as_bool(data.pop("portal_access", False))
+        access_level = data.pop("access_level", None)
+        login_password = data.pop("login_password", None)
         if data.get("face_embedding"):
             data["face_enrolled"] = True
-        return super().create(data)
+        employee = super().create(data)
+        if portal_access:
+            sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password)
+        return employee
 
     def update(self, object_id: str, data: dict):
+        portal_access = data.pop("portal_access", None)
+        access_level = data.pop("access_level", None)
+        login_password = data.pop("login_password", None)
         if data.get("face_embedding"):
             data["face_enrolled"] = True
-        return super().update(object_id, data)
+        employee = super().update(object_id, data)
+        if self._as_bool(portal_access) or login_password:
+            sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password)
+        return employee
 
 
 class ShiftService(BaseService):

@@ -25,6 +25,7 @@ class AuthService:
             "tenant_id": user.tenant_id,
             "company_id": user.company_id,
             "is_super_admin": user.is_super_admin,
+            "access_level": getattr(user, "access_level", "employee"),
         }
         return {
             "access_token": create_access_token(str(user.id), claims),

@@ -48,4 +48,4 @@ def change_password(payload: PasswordChangeRequest, user: User = Depends(get_cur
 
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
-    return {"id": str(user.id), "email": user.email, "name": user.full_name, "tenant_id": user.tenant_id, "company_id": user.company_id}
+    return {"id": str(user.id), "email": user.email, "name": user.full_name, "tenant_id": user.tenant_id, "company_id": user.company_id, "access_level": getattr(user, "access_level", "employee")}

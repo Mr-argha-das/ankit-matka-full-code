@@ -26,15 +26,25 @@
         <span class="nav-section">Operations</span>
         <a class="nav-link" href="/">Dashboard</a>
         <a class="nav-link" href="/attendance">Live Attendance</a>
+        {% if access_level != "employee" %}
         <a class="nav-link" href="/employees">Employees</a>
+        {% endif %}
+        {% if access_level == "admin" %}
         <a class="nav-link" href="/branches">Branches & Kiosks</a>
         <a class="nav-link" href="/shifts">Shift Rules</a>
+        {% endif %}
         <span class="nav-section">Company</span>
+        {% if access_level == "admin" %}
         <a class="nav-link" href="/departments">Departments</a>
+        {% endif %}
         <a class="nav-link" href="/leave">Leave</a>
+        {% if access_level in ["admin", "manager", "tl"] %}
         <a class="nav-link" href="/reports">Reports</a>
+        {% endif %}
+        {% if access_level == "admin" %}
         <a class="nav-link" href="/companies">Companies</a>
         <a class="nav-link" href="/settings">Settings</a>
+        {% endif %}
       </nav>
     </aside>
     <main class="main-panel">
@@ -44,8 +54,12 @@
           <p class="text-muted mb-0">Branch kiosk, face enrollment, and attendance control center</p>
         </div>
         <div class="d-flex gap-2">
+          {% if access_level in ["admin", "manager", "tl"] %}
           <a class="btn btn-outline-secondary btn-sm" href="/reports">Export</a>
+          {% endif %}
+          {% if access_level == "admin" %}
           <a class="btn btn-primary btn-sm" href="/branches">Setup Kiosk</a>
+          {% endif %}
         </div>
       </header>
       <section class="content">

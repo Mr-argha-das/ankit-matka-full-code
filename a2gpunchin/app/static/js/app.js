@@ -63,6 +63,7 @@ function actionCell(item, table) {
   button.className = "btn btn-sm btn-outline-primary table-edit-button";
   button.dataset.api = `${table.dataset.api}/${item.id}`;
   button.dataset.modal = editModal;
+  button.dataset.title = table.dataset.editTitle || "Edit";
   button.textContent = "Edit";
   cell.appendChild(button);
   return cell;
@@ -325,7 +326,7 @@ document.addEventListener("click", async (event) => {
     form.dataset.api = editButton.dataset.api;
     fillForm(form, data);
     const title = modal.querySelector(".modal-title");
-    if (title) title.textContent = "Edit Shift Rule";
+    if (title) title.textContent = editButton.dataset.title;
     new bootstrap.Modal(modal).show();
   } catch (error) {
     toast(error.message || "Unable to load record", "danger");

@@ -32,6 +32,8 @@ def crud_router(
             filters = {}
             if permission_prefix == "employees" and branch_id:
                 filters["branch_id"] = branch_id
+            if permission_prefix == "employees":
+                filters["current_user"] = _
             items, total = service.list(page=page, page_size=page_size, search=search, sort=sort, **filters)
             serialized = [list_serializer(item) for item in items] if list_serializer else documents_to_dicts(items)
             return {"items": serialized, "total": total, "page": page, "page_size": page_size}

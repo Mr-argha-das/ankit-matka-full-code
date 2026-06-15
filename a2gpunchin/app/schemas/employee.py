@@ -33,6 +33,9 @@ class EmployeeCreate(BaseModel):
     aadhar_number: str | None = None
     pan_number: str | None = None
     face_embedding: list[float] | None = None
+    portal_access: bool = False
+    access_level: str | None = None
+    login_password: str | None = None
 
 
 class EmployeeUpdate(BaseModel):
@@ -65,6 +68,9 @@ class EmployeeUpdate(BaseModel):
     pan_number: str | None = None
     face_embedding: list[float] | None = None
     status: str | None = None
+    portal_access: bool | None = None
+    access_level: str | None = None
+    login_password: str | None = None
 
 
 class EmployeeFaceEnroll(BaseModel):

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.core.dependencies import get_current_user, require_permissions
 from app.models.user import User
 from app.schemas.attendance import AttendanceCheckIn, AttendanceCheckOut, AttendanceManualCheckOut, PunchLocation
+from app.services.access_control import scoped_employees_for_user
 from app.services.attendance import AttendanceService
 from app.utils.serializers import document_to_dict
 
@@ -88,7 +89,7 @@ def list_attendance(
     employee_id: str | None = None,
     branch_id: str | None = None,
     status: str | None = None,
-    _=Depends(require_permissions("attendance:read")),
+    user: User = Depends(require_permissions("attendance:read")),
 ):
     service.sync_missing_face_attendance_records()
     service.auto_punch_out_overdue()
@@ -100,6 +101,12 @@ def list_attendance(
         filters["attendance_date__lte"] = end_date
     if employee_id:
         filters["employee_id"] = employee_id
+    scoped_employees = scoped_employees_for_user(user)
+    if scoped_employees is not None:
+        scoped_ids = {str(employee.id) for employee in scoped_employees}
+        if employee_id and employee_id not in scoped_ids:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        filters["employee_id__in"] = scoped_employees
     if branch_id:
         filters["branch_id"] = branch_id
     if status:
