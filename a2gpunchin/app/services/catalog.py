@@ -1,3 +1,7 @@
+from bson import ObjectId
+from bson.errors import InvalidId
+from fastapi import HTTPException, status
+
 from app.models.branch import Branch
 from app.models.company import Company
 from app.models.department import Department
@@ -95,6 +99,7 @@ class DepartmentService(BaseService):
 
 class EmployeeService(BaseService):
     search_fields = ["employee_code", "first_name", "last_name", "email", "phone"]
+    reference_fields = {"department_id", "branch_id", "shift_id", "reporting_manager"}
 
     def __init__(self):
         super().__init__(BaseRepository(Employee))
@@ -103,6 +108,21 @@ class EmployeeService(BaseService):
         if isinstance(value, bool):
             return value
         return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _normalize_reference_ids(self, data: dict) -> dict:
+        for field in self.reference_fields:
+            if field not in data:
+                continue
+            value = data[field]
+            if value in (None, "", "-"):
+                data.pop(field)
+                continue
+            if isinstance(value, str):
+                try:
+                    data[field] = ObjectId(value)
+                except InvalidId as exc:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid {field.replace('_', ' ')} selected.") from exc
+        return data
 
     def list(self, page: int = 1, page_size: int = 20, search: str | None = None, sort: str = "-created_at", **filters):
         current_user = filters.pop("current_user", None)
@@ -123,6 +143,7 @@ class EmployeeService(BaseService):
         return list(query.order_by(sort).skip((page - 1) * page_size).limit(page_size)), total
 
     def create(self, data: dict):
+        data = self._normalize_reference_ids(data)
         portal_access = self._as_bool(data.pop("portal_access", False))
         access_level = data.pop("access_level", None)
         login_password = data.pop("login_password", None)
@@ -134,13 +155,14 @@ class EmployeeService(BaseService):
         return employee
 
     def update(self, object_id: str, data: dict):
+        data = self._normalize_reference_ids(data)
         portal_access = data.pop("portal_access", None)
         access_level = data.pop("access_level", None)
         login_password = data.pop("login_password", None)
         if data.get("face_embedding"):
             data["face_enrolled"] = True
         employee = super().update(object_id, data)
-        if data.get("status") and employee.user_id:
+        if data.get("status") and employee.user_id and not employee.user_id.is_super_admin:
             employee.user_id.status = "active" if employee.status == "active" else "inactive"
             employee.user_id.is_active = employee.status == "active"
             employee.user_id.save()
