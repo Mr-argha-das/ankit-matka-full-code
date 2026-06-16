@@ -16,11 +16,14 @@ async function apiFetch(url, options = {}) {
   const response = await fetch(url, {...options, credentials: "same-origin", headers: {...authHeaders(), ...(options.headers || {})}});
   if (!response.ok) {
     let detail = "Request failed";
-    try {
-      const payload = await response.json();
-      detail = payload.detail || detail;
-    } catch (_) {
-      detail = await response.text() || detail;
+    const text = await response.text();
+    if (text) {
+      try {
+        const payload = JSON.parse(text);
+        detail = payload.detail || text;
+      } catch (_) {
+        detail = text;
+      }
     }
     throw new Error(detail);
   }
