@@ -3,6 +3,7 @@ import { ArrowLeft, Phone, Mail } from "lucide-react";
 import { FaW, FaWhatsapp } from "react-icons/fa6";
 import { FaTelegram, FaTelegramPlane } from "react-icons/fa";
 import { fetchSiteData } from "../components/layout/fetchSiteData";
+import { SUPPORT_PHONE } from "../config";
 
 export default function ContactUs() {
   const [site, setSite] = useState(null);
@@ -39,7 +40,7 @@ export default function ContactUs() {
       {/* CONTENT */}
       <div className="p-3 space-y-3 text-sm">
         <a
-          href={`https://wa.me/${site?.whatsapp_number}`}
+          href={`https://wa.me/${SUPPORT_PHONE}`}
           target="_blank"
           rel="noopener noreferrer"
           className="bg-white/5  rounded-xl p-3 shadow flex items-center gap-4"
@@ -47,7 +48,7 @@ export default function ContactUs() {
           <FaWhatsapp size={30} color="#25D366" />
           <div>
             <p className="text-gray-200 font-semibold">Chat Us:</p>
-            <p className="text-gray-200">{site?.whatsapp_number}</p>
+            <p className="text-gray-200">+{SUPPORT_PHONE}</p>
           </div>
         </a>
 

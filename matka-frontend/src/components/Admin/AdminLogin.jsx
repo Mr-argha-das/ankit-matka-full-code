@@ -158,7 +158,7 @@ export default function AdminLoginPage() {
         <p className="text-center text-gray-400 mt-5 text-sm">
           Need Assistance?{" "}
           <a
-            href="https://wa.me/917726035987"
+            href="https://wa.me/918585918780"
             className="text-green-400 underline"
             target="_blank"
             rel="noreferrer"

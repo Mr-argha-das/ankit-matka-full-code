@@ -11,8 +11,8 @@ def get_site_data():
 
     if not d:
         return {
-            "mobile_number": "",
-            "whatsapp_number": "",
+            "mobile_number": "+918585918780",
+            "whatsapp_number": "918585918780",
             "telegram_link": "",
             "dashboard_notification_line": "",
             "add_fund_notification_line": "",

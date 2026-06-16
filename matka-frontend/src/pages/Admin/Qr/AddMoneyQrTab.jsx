@@ -91,7 +91,7 @@ const AddMoneyQrTab = () => {
     const fd = new FormData();
     fd.append("image", selectedFile);
     fd.append("amount", amount);
-    fd.append("method", localStorage.getItem("add_method") || "");
+    fd.append("method", localStorage.getItem("add_method") || "UPI QR");
 
     try {
       const res = await axios.post(`${API_BASE}/upload`, fd, {
@@ -112,6 +112,7 @@ const AddMoneyQrTab = () => {
       setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
       console.log("UPLOAD ERROR:", err);
+      alert(err.response?.data?.detail || "Screenshot upload failed");
     }
   };
 
@@ -167,22 +168,20 @@ const AddMoneyQrTab = () => {
         ))}
       </div>
 
-      {siteData?.withdraw_money_html ? (
+      {siteData?.add_money_html ? (
         <div
           className="text-gray-200 mt-5 text-sm"
           dangerouslySetInnerHTML={{
-            __html: siteData?.withdraw_money_html,
+            __html: siteData?.add_money_html,
           }}
         />
       ) : (
         <div className="mt-4 mx-5  text-center  max-w-md text-sm text-gray-200 leading-6">
           <p>
-            UPI पर पेमेंट करके एडमिन को
-            <span className="font-bold text-purple-300"></span> पर स्क्रीनशॉट
-            भेजे।
+            UPI पर पेमेंट करके नीचे स्क्रीनशॉट upload करें।
           </p>
           <p className="mt-2 text-gray-300">
-            Make payment via UPI and send screenshot to admin on WhatsApp.
+            Screenshot admin panel me pending deposit request ke andar jayega.
           </p>
 
           <p className="mt-2 font-semibold text-gray-300">

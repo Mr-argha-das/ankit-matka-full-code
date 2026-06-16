@@ -6,6 +6,7 @@ const resolveApiUrl = () => {
 };
 
 export const API_URL = resolveApiUrl();
+export const SUPPORT_PHONE = "918585918780";
 // export const API_URL = "http://187.77.185.244:8000";
 
 // export const API_URL = "https://qbwm3635-8000.inc1.devtunnels.ms";
