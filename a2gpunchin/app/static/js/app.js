@@ -14,7 +14,16 @@ function toast(message, tone = "success") {
 
 async function apiFetch(url, options = {}) {
   const response = await fetch(url, {...options, credentials: "same-origin", headers: {...authHeaders(), ...(options.headers || {})}});
-  if (!response.ok) throw new Error((await response.json()).detail || "Request failed");
+  if (!response.ok) {
+    let detail = "Request failed";
+    try {
+      const payload = await response.json();
+      detail = payload.detail || detail;
+    } catch (_) {
+      detail = await response.text() || detail;
+    }
+    throw new Error(detail);
+  }
   if (response.status === 204) return null;
   return response.json();
 }
@@ -30,6 +39,10 @@ function formBody(form) {
       body[key] = JSON.parse(body[key]);
     }
   });
+  if (body.portal_access !== true && body.portal_access !== "true") {
+    delete body.login_password;
+    delete body.access_level;
+  }
   return body;
 }
 
@@ -289,12 +302,19 @@ function resetAjaxForm(form) {
   form.dataset.method = "POST";
   form.dataset.api = form.dataset.createApi || form.dataset.api;
   form.querySelectorAll("input[type='hidden'][data-edit-id='true']").forEach((input) => input.remove());
+  form.querySelectorAll("input[type='password']").forEach((input) => {
+    input.value = "";
+  });
 }
 
 function fillForm(form, data) {
   Object.entries(data).forEach(([key, value]) => {
     const input = form.elements[key];
     if (!input) return;
+    if (input.type === "password") {
+      input.value = "";
+      return;
+    }
     if (input.type === "checkbox") {
       input.checked = value === true || value === "true";
       return;

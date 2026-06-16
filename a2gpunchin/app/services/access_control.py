@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fastapi import HTTPException, status
+
 from app.core.security import hash_password
 from app.models.employee import Employee
 from app.models.rbac import Permission, Role
@@ -128,12 +130,18 @@ def sync_employee_user(employee: Employee, access_enabled: bool, access_level: s
         return employee.user_id
 
     role = role_for_access_level(access_level, employee.tenant_id, employee.company_id)
-    user = employee.user_id or User.objects(email=employee.email.lower(), is_active=True).first()
+    employee_email = employee.email.lower()
+    existing_user = User.objects(email=employee_email, is_active=True).first()
+    user = employee.user_id or existing_user
+    if existing_user and employee.user_id and str(existing_user.id) != str(employee.user_id.id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This email is already used by another dashboard user.")
+    if existing_user and not employee.user_id and (existing_user.is_super_admin or existing_user.roles):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This email is already used by an admin/dashboard user.")
     if not user:
         user = User(
             tenant_id=employee.tenant_id,
             company_id=employee.company_id,
-            email=employee.email.lower(),
+            email=employee_email,
             password_hash=hash_password(password or "Welcome@123"),
             first_name=employee.first_name,
             last_name=employee.last_name,
@@ -143,7 +151,7 @@ def sync_employee_user(employee: Employee, access_enabled: bool, access_level: s
             is_email_verified=True,
         )
     else:
-        user.email = employee.email.lower()
+        user.email = employee_email
         user.first_name = employee.first_name
         user.last_name = employee.last_name
         user.phone = employee.phone

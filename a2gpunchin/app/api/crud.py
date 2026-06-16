@@ -27,11 +27,14 @@ def crud_router(
             search: str | None = None,
             sort: str = "-created_at",
             branch_id: str | None = None,
+            status: str | None = None,
             _=Depends(require_permissions(f"{permission_prefix}:read")),
         ):
             filters = {}
             if permission_prefix == "employees" and branch_id:
                 filters["branch_id"] = branch_id
+            if permission_prefix == "employees" and status:
+                filters["status"] = status
             if permission_prefix == "employees":
                 filters["current_user"] = _
             items, total = service.list(page=page, page_size=page_size, search=search, sort=sort, **filters)

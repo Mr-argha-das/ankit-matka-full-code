@@ -140,7 +140,11 @@ class EmployeeService(BaseService):
         if data.get("face_embedding"):
             data["face_enrolled"] = True
         employee = super().update(object_id, data)
-        if self._as_bool(portal_access) or login_password:
+        if data.get("status") and employee.user_id:
+            employee.user_id.status = "active" if employee.status == "active" else "inactive"
+            employee.user_id.is_active = employee.status == "active"
+            employee.user_id.save()
+        if self._as_bool(portal_access):
             sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password)
         return employee
 
