@@ -1,15 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
-import { ArrowLeft, DollarSign, HistoryIcon, Pencil, Save } from "lucide-react";
+import { ArrowLeft, Pencil, Save } from "lucide-react";
 import { API_URL } from "../config";
-import UpiPayment from "../components/layout/upi";
 
 const API_BASE = `${API_URL}/user`;
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  console.log(user);
   const [username, setUsername] = useState("");
   const [mobile, setMobile] = useState("");
 
@@ -18,47 +16,30 @@ export default function ProfilePage() {
 
   const token = localStorage.getItem("accessToken");
 
-  function parseJwt(token) {
-    try {
-      return JSON.parse(atob(token.split(".")[1]));
-    } catch (e) {
-      return null;
-    }
-  }
-  const [userId, setUserId] = useState(null);
-  const decoded = parseJwt(token);
-  console.log("userId", userId);
-  useEffect(() => {
-    setUserId(decoded?.sub);
-  }, [decoded]);
-
-  const authHeader = {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-
   // ---------------------------
   // GET PROFILE
   // ---------------------------
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/profile2`, authHeader);
+      const res = await axios.get(`${API_BASE}/profile2`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setUser(res?.data);
       setUsername(res?.data?.username || "");
       setMobile(res?.data?.mobile || "");
     } catch (err) {
       console.log("Profile load error:", err);
+      setMsg(err.response?.data?.detail || "Profile load failed");
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   const updateProfile = async () => {
     setMsg("");
@@ -73,7 +54,9 @@ export default function ProfilePage() {
       formData.append("username", username);
       formData.append("mobile", mobile);
 
-      await axios.put(`${API_BASE}/profile`, formData, authHeader);
+      await axios.put(`${API_BASE}/profile`, formData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setMsg("Profile Updated Successfully ✔");
       setEditMode(false);
@@ -89,6 +72,21 @@ export default function ProfilePage() {
     return (
       <div className="text-white min-h-screen flex justify-center items-center">
         Loading Profile...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center text-white">
+        <p className="text-lg font-semibold">Profile load nahi ho paayi.</p>
+        <p className="mt-2 text-sm text-gray-400">{msg}</p>
+        <button
+          onClick={fetchProfile}
+          className="mt-5 rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -200,7 +198,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* <UpiPayment /> */}
     </div>
   );
 }

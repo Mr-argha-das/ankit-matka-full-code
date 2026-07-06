@@ -63,20 +63,6 @@ export default function GGameList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleStatus = async (id, current) => {
-    try {
-      await axios.patch(
-        `${API_URL}/api/admin/Golidesawar/market/${id}/status?status=${!current}`,
-        {},
-        { headers }
-      );
-      await fetchGames();
-    } catch (err) {
-      console.error("Status update error:", err?.response?.data || err);
-      alert("Error updating status");
-    }
-  };
-
   const deleteGame = async (id) => {
     try {
       if (!confirm("Delete this game?")) return;
@@ -114,7 +100,7 @@ export default function GGameList() {
   return (
     <div className="lg:p-6 md:p-5 p-3">
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-xl font-semibold">Golidesawar Game List</h2>
+        <h2 className="text-xl font-semibold">Gali Disawar Game List</h2>
 
         <button
           onClick={() => setOpenModal(true)}

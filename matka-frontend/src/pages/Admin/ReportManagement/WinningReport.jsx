@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import { API_URL } from "../../../config";
 
-// const API_URL = "https://api.kalyanratan777.com";
+// const API_URL = "https://api.natraj777.com";
 
 export default function WinHistory() {
   const token = localStorage.getItem("token");

@@ -253,12 +253,12 @@ export default function DepositeByOwn({ onRequestCreated }) {
             !settings?.min_deposit ||
             amount < settings?.min_deposit
           }
-          className={`w-full bg-gradient-to-tl
-            text-white font-semibold py-3 rounded-[20px] flex items-center justify-center transition
+          className={`w-full
+            text-white font-extrabold py-4 rounded-[22px] flex items-center justify-center transition shadow-[0_12px_32px_rgba(255,0,0,0.35)]
             ${
               loading || amount < settings?.min_deposit
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-purple-800"
+                ? "bg-red-900/40 opacity-50 cursor-not-allowed"
+                : "bg-gradient-to-r from-red-700 via-red-500 to-red-700 hover:from-red-600 hover:to-red-500 active:scale-[0.98]"
             }`}
         >
 

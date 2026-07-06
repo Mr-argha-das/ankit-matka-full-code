@@ -82,7 +82,7 @@ export default function AllUserBids() {
 
         <h2 className="text-md z-0 w-full absolute font-bold px-4 py-2 flex justify-center items-center gap-2">
           <span className="flex gap-2 text-md items-center uppercase">
-            Golidesawar Bids
+            Gali Disawar Bids
           </span>
         </h2>
 

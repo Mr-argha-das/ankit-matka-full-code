@@ -52,8 +52,8 @@ def create_payment(req: CreatePaymentRequest):
         ).save()
 
         upi_link = (
-        f"upi://pay?pa=2977654a@bandhan&pn=Kalyan Ratan 777"
-        f"&am=1&cu=INR&tn=Paying to Kalyan Ratan 777&tr={txn_id}"
+        f"upi://pay?pa=2977654a@bandhan&pn=Natraj 777"
+        f"&am=1&cu=INR&tn=Paying to Natraj 777&tr={txn_id}"
         )
 
         return {

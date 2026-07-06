@@ -72,7 +72,7 @@ export default function AppHeader({ setSidebar }) {
           </button>
           {/* <img src="/logo.png" alt="Logo" className="w-8 h-8" /> */}
           <h1 className="text-white text-lg font-extrabold tracking-wide">
-            KalyanRatan777
+            Natraj777
           </h1>
         </div>
         <div className="flex items-center gap-3">

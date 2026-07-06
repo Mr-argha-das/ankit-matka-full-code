@@ -87,7 +87,7 @@ export default function SidebarMenu({ sidebar, setSidebar }) {
     { icon: <Star size={18} />, label: "Starline", link: "/starline" },
     {
       icon: <SiMarketo size={18} />,
-      label: "Galidesawar",
+      label: "Gali Disawar",
       link: "/golidesawar",
     },
     {

@@ -196,7 +196,7 @@ const Sidebar = ({ open }) => {
       ],
     },
     {
-      name: "Golidesawar ",
+      name: "Gali Disawar",
       icon: <SiMarketo size={18} />,
       dropdown: true,
       children: [
