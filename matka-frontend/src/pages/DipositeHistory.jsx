@@ -69,18 +69,17 @@ export default function DepositHistory() {
       try {
         const token = getAuthToken();
 
-        const res = await axios.get(`${API_BASE_URL}/deposit-qr/history`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const res = await axios.get(
+          `${API_BASE_URL}/user-deposit-withdrawal/history`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-        console.log("API Response:", res.data);
-
-        // AXIOS: data comes in res.data
         const data = res.data;
-
-        setHistory(data.history || []);
+        setHistory(Array.isArray(data) ? data : data.history || []);
       } catch (err) {
         console.error(err);
         setError("Failed to fetch deposit history.");

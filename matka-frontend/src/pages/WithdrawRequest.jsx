@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from "react";
 import {
   Loader2,
-  DollarSign,
   User2,
   History,
-  DollarSignIcon,
   ArrowLeft,
-  HistoryIcon,
-  Phone,
 } from "lucide-react";
 import { API_URL } from "../config";
 import axios from "axios";
@@ -16,25 +12,6 @@ import { getUserById } from "../components/layout/fetchUser";
 const API_BASE_URL = API_URL; // Replace with your actual base URL
 
 const getAuthToken = () => localStorage.getItem("accessToken");
-
-// Utility function to get user ID from a basic JWT structure (header.payload.signature)
-const getUserIdFromToken = () => {
-  const token = getAuthToken();
-  if (token) {
-    try {
-      // Decode the payload (second part of the JWT)
-      const payloadBase64 = token.split(".")[1];
-      // atob is used for base64 decoding in the browser
-      const decodedPayload = JSON.parse(atob(payloadBase64));
-      // Assuming 'sub' (subject) or 'id' holds the user ID
-      return decodedPayload.sub || decodedPayload.id || "User ID Not Found";
-    } catch (e) {
-      // console.error("Failed to decode token:", e);
-      return "Not Logged In";
-    }
-  }
-  return "Not Logged In";
-};
 
 export default function WithdrawRequest() {
   const [amount, setAmount] = useState("");
@@ -48,33 +25,31 @@ export default function WithdrawRequest() {
   const [message, setMessage] = useState(null);
   const [currentBalance, setCurrentBalance] = useState(null);
   const [minWithdraw, setMinWithdraw] = useState(200);
-  const [currentUserId, setCurrentUserId] = useState(null);
-  const [showTermsModal, setShowTermsModal] = useState(false);
   const [siteData, setSiteData] = useState(null);
+  const userId = localStorage.getItem("userId");
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      const res = await axios.get(`${API_URL}/sitedata/get`);
-
-      console.log(res?.data);
-      setSiteData(res.data);
+      try {
+        const res = await axios.get(`${API_URL}/sitedata/get`);
+        setSiteData(res.data);
+      } catch (error) {
+        console.log("Site data fetch error:", error);
+      }
     };
 
     load();
   }, []);
 
-  const [settings, setSettings] = useState(null);
-
   useEffect(() => {
     async function load() {
-      const res = await axios.get(`${API_URL}/settings/get`);
-
-      // console.log(res);
-      setSettings(res?.data);
-      if (error) {
+      try {
+        const res = await axios.get(`${API_URL}/settings/get`);
+        const nextSettings = res?.data || {};
+        setMinWithdraw(Number(nextSettings.min_withdraw || 0));
+      } catch (error) {
         console.log("Settings API Error:", error);
-      } else {
-        setSettings(data);
       }
     }
 
@@ -102,13 +77,8 @@ export default function WithdrawRequest() {
   };
 
   useEffect(() => {
-    setCurrentUserId(getUserIdFromToken());
     fetchBalance();
   }, []);
-
-  const userId = localStorage.getItem("userId");
-  const [user, setUser] = useState(null);
-  const [error, setError] = useState(null);
 
   // console.log(user);
   useEffect(() => {
@@ -116,7 +86,7 @@ export default function WithdrawRequest() {
       const { data, error } = await getUserById(userId);
 
       if (error) {
-        setError(error);
+        console.log("User fetch error:", error);
       } else {
         setUser(data);
       }
@@ -138,7 +108,7 @@ export default function WithdrawRequest() {
 
     const withdrawAmount = parseFloat(amount);
 
-    if (withdrawAmount <= minWithdraw) {
+    if (Number.isNaN(withdrawAmount) || withdrawAmount < minWithdraw) {
       setMessage({
         type: "error",
         text: `Minimum withdrawal is ₹${minWithdraw}.`,
@@ -152,12 +122,6 @@ export default function WithdrawRequest() {
     }
 
     setLoading(true);
-
-    // Prepare form data for FastAPI endpoint (uses x-www-form-urlencoded)
-    const formData = new URLSearchParams();
-    formData.append("amount", withdrawAmount);
-    formData.append("method", method);
-    formData.append("number", number);
 
     let payload;
 
@@ -190,9 +154,6 @@ export default function WithdrawRequest() {
       );
 
       const data = response.data;
-      if (data.message === "Withdrawal request submitted") {
-        fetchBalance();
-      }
       // console.log(data);
       setMessage({
         type: "success",
@@ -206,7 +167,11 @@ export default function WithdrawRequest() {
 
       setAmount("");
       setNumber("");
-      setCurrentBalance((cb) => cb - withdrawAmount);
+      setCurrentBalance((cb) =>
+        typeof data.available_balance === "number"
+          ? data.available_balance
+          : cb - withdrawAmount
+      );
     } catch (error) {
       if (error.response) {
         // Server responded
@@ -259,7 +224,7 @@ export default function WithdrawRequest() {
           {currentBalance?.toFixed(2)}
         </p>
         <p className="text-xs mt-1 text-gray-400">
-          Minimum Withdrawal: ₹{settings?.min_withdraw}
+          Minimum Withdrawal: ₹{minWithdraw}
         </p>
       </div>
 
@@ -289,7 +254,7 @@ export default function WithdrawRequest() {
           <input
             type="number"
             id="amount"
-            placeholder={`Min ₹${settings?.min_withdraw}`}
+            placeholder={`Min ₹${minWithdraw}`}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="w-full p-3 rounded-lg  border border-gray-700 text-white focus:ring-purple-500 focus:border-purple-500"
@@ -395,8 +360,8 @@ export default function WithdrawRequest() {
           type="submit"
           disabled={
             loading ||
-            amount < settings?.min_withdraw ||
-            amount > currentBalance ||
+            Number(amount) < minWithdraw ||
+            Number(amount) > currentBalance ||
             (method !== "Bank Transfer"
               ? !number
               : !bankholderName || !account || !ifsc) // Bank Transfer validation
@@ -427,7 +392,7 @@ export default function WithdrawRequest() {
             <p>
               <b>Withdrawal Rules:</b>
             </p>
-            <ul class="list-disc pl-5">
+            <ul className="list-disc pl-5">
               <li>Withdrawal time: 9 AM to 6 PM</li>
               <li>All withdrawals will be processed within 30 minutes</li>
               <li>UPI ID must be correct and verified</li>

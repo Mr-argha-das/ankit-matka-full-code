@@ -1,7 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Editor } from "@tinymce/tinymce-react";
 import axios from "axios";
-import { API_URL, EditerApiKey } from "../../../config";
+import { API_URL } from "../../../config";
+
+function HtmlEditor({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="font-semibold">{label}</label>
+      <textarea
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={12}
+        spellCheck={false}
+        className="mt-2 w-full rounded border border-gray-50/15 bg-[#1f2d3a] p-3 font-mono text-sm text-white outline-none focus:border-red-500"
+      />
+    </div>
+  );
+}
 
 export default function AdminSiteData() {
   const API_BASE = API_URL;
@@ -164,114 +178,35 @@ export default function AdminSiteData() {
 
       {/* RICH TEXT EDITORS */}
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Withdraw Money */}
-        <div>
-          <label className="font-semibold">Add By Qr Content</label>
-          <Editor
-            value={siteData?.withdraw_money_html}
-            onEditorChange={(v) =>
-              setSiteData({ ...siteData, withdraw_money_html: v })
-            }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
-          />
-        </div>
+        <HtmlEditor
+          label="Add By Qr Content"
+          value={siteData?.withdraw_money_html}
+          onChange={(v) =>
+            setSiteData({ ...siteData, withdraw_money_html: v })
+          }
+        />
 
-        {/* Add Money */}
-        <div>
-          <label className="font-semibold">Add Money</label>
-          <Editor
-            value={siteData.add_money_html}
-            onEditorChange={(v) =>
-              setSiteData({ ...siteData, add_money_html: v })
-            }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
-            // init={{ height: 200, menubar: false }}
-          />
-        </div>
+        <HtmlEditor
+          label="Add Money"
+          value={siteData.add_money_html}
+          onChange={(v) => setSiteData({ ...siteData, add_money_html: v })}
+        />
 
-        {/* Notice Board */}
-        <div>
-          <label className="font-semibold">Notice Board</label>
-          <Editor
-            value={siteData.notice_board_html}
-            onEditorChange={(v) =>
-              setSiteData({ ...siteData, notice_board_html: v })
-            }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
-          />
-        </div>
+        <HtmlEditor
+          label="Notice Board"
+          value={siteData.notice_board_html}
+          onChange={(v) =>
+            setSiteData({ ...siteData, notice_board_html: v })
+          }
+        />
 
-        {/* Withdraw T&C */}
-        <div>
-          <label className="font-semibold">Withdraw Terms & Conditions</label>
-          <Editor
-            value={siteData.withdraw_terms_html}
-            onEditorChange={(v) =>
-              setSiteData({ ...siteData, withdraw_terms_html: v })
-            }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
-          />
-        </div>
+        <HtmlEditor
+          label="Withdraw Terms & Conditions"
+          value={siteData.withdraw_terms_html}
+          onChange={(v) =>
+            setSiteData({ ...siteData, withdraw_terms_html: v })
+          }
+        />
       </div>
 
       <button

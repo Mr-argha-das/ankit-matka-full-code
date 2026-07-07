@@ -1,6 +1,6 @@
 from bson import ObjectId
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
-from fastapi.responses import FileResponse\
+from fastapi.responses import FileResponse
 
 
 # from datetime import datetime
@@ -245,6 +245,15 @@ def request_withdraw(
     if wallet.balance < amount:
         raise HTTPException(400, "Insufficient balance")
 
+    pending_total = sum(
+        pending.amount
+        for pending in Withdrawal.objects(user_id=str(user.id), status="pending")
+    )
+    available_balance = wallet.balance - pending_total
+
+    if available_balance < amount:
+        raise HTTPException(400, "Insufficient available balance")
+
     # Create withdrawal request
     wd = Withdrawal(
         user_id=str(user.id),
@@ -259,7 +268,8 @@ def request_withdraw(
     return {
         "message": "Withdrawal request submitted",
         "withdrawal_id": wd.wd_id,
-        "status": wd.status
+        "status": wd.status,
+        "available_balance": available_balance - amount
     }
 
 
@@ -291,28 +301,30 @@ def my_withdrawals(user=Depends(get_current_user)):
 # 9️⃣ ADMIN: View Withdrawal Requests
 # =====================================================================
 
-@router.get("/admin/withdraw" )
+@router.get("/admin/withdraw", dependencies=[Depends(require_admin)])
 def admin_withdrawals():
     pending = Withdrawal.objects().order_by("-created_at")
-    print(pending)
-    return [
-        {
+    data = []
+
+    for w in pending:
+        user = User.objects(id=str(w.user_id)).first()
+        data.append({
             "wd_id": w.wd_id,
-            "username": User.objects(id=str(w.user_id)).first().username,
-            "mobileNumber": User.objects(id=str(w.user_id) ).first().mobile,
+            "username": user.username if user else "Unknown",
+            "mobileNumber": user.mobile if user else "",
             "amount": w.amount,
             "method": w.method,
             "number": w.number,
             "status": w.status,
             "created_at": w.created_at,
-            "account_holder_name":w.account_holder_name,
-            "account_no":w.account_no,
+            "account_holder_name": w.account_holder_name,
+            "account_no": w.account_no,
             "ifc_code": w.ifc_code
-        }
-        for w in pending
-    ]
+        })
 
-@router.post("/admin/withdraw/approve")
+    return data
+
+@router.post("/admin/withdraw/approve", dependencies=[Depends(require_admin)])
 def approve_withdrawal(wd_id: str = Form(...)):
     wd = Withdrawal.objects(wd_id=wd_id).first()
     if not wd:
@@ -331,64 +343,6 @@ def approve_withdrawal(wd_id: str = Form(...)):
     wallet.save()
 
     wd.status = "success"
-    wd.confirmed_at = datetime.datetime.utcnow()   # <<< FIX
-    wd.save()
-
-    Transaction(
-        tx_id=str(uuid.uuid4()),
-        user_id=str(wd.user_id),
-        amount=-wd.amount,
-        payment_method="Withdrawal",
-        status="SUCCESS"
-    ).save()
-
-    return {"message": "Withdrawal Approved", "new_balance": wallet.balance}
-
-
-
-
-
-@router.post("/admin/withdraw/reject")
-def reject_withdrawal(wd_id: str = Form(...)):
-    wd = Withdrawal.objects(wd_id=wd_id).first()
-    if not wd:
-        raise HTTPException(404, "Withdrawal not found")
-
-    if wd.status != "pending":
-        raise HTTPException(400, "Already processed")
-
-    wd.status = "rejected"
-    wd.confirmed_at = datetime.datetime.utcnow()   # <<< FIX
-    wd.save()
-
-    return {"message": "Withdrawal rejected"}
-
-
-
-# # =====================================================================
-# # 🔟 ADMIN: Approve Withdrawal
-# # =====================================================================
-
-@router.post("/admin/withdraw/approve" ,dependencies=[Depends(require_admin)])
-def approve_withdraw(wd_id: str = Form(...)):
-
-    wd = Withdrawal.objects(wd_id=wd_id).first()
-    if not wd:
-        raise HTTPException(404, "Withdrawal request not found")
-
-    if wd.status != "PENDING":
-        return {"message": "Already processed"}
-
-    wallet = get_or_create_wallet(wd.user_id)
-
-    if wallet.balance < wd.amount:
-        raise HTTPException(400, "User balance insufficient")
-
-    wallet.balance -= wd.amount
-    wallet.updated_at = datetime.datetime.utcnow()
-    wallet.save()
-
-    wd.status = "SUCCESS"
     wd.confirmed_at = datetime.datetime.utcnow()
     wd.save()
 
@@ -403,22 +357,20 @@ def approve_withdraw(wd_id: str = Form(...)):
     return {"message": "Withdrawal Approved", "new_balance": wallet.balance}
 
 
-# # =====================================================================
-# # 1️⃣1️⃣ ADMIN: Reject Withdrawal
-# # =====================================================================
 
-# @router.post("/admin/withdraw/reject" ,dependencies=[Depends(require_admin)])
-# def reject_withdraw(wd_id: str = Form(...)):
 
+
+@router.post("/admin/withdraw/reject", dependencies=[Depends(require_admin)])
+def reject_withdrawal(wd_id: str = Form(...)):
     wd = Withdrawal.objects(wd_id=wd_id).first()
     if not wd:
         raise HTTPException(404, "Withdrawal not found")
 
-    if wd.status != "PENDING":
-        return {"message": "Already processed"}
+    if wd.status != "pending":
+        raise HTTPException(400, "Already processed")
 
-    wd.status = "FAILED"
-    wd.confirmed_at = datetime.utcnow()
+    wd.status = "rejected"
+    wd.confirmed_at = datetime.datetime.utcnow()
     wd.save()
 
     Transaction(
@@ -429,4 +381,4 @@ def approve_withdraw(wd_id: str = Form(...)):
         status="FAILED"
     ).save()
 
-    return {"message": "Withdrawal Rejected"}
+    return {"message": "Withdrawal rejected"}

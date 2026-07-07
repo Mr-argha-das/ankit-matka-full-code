@@ -9,9 +9,10 @@ import {
   Lock,
   ShieldAlert,
 } from "lucide-react";
-import { API_URL, SUPPORT_PHONE } from "../config";
+import { API_URL, normalizePhoneNumber } from "../config";
 import logo from "../assets/logo.png";
 const API_BASE_URL = API_URL;
+import { fetchSiteData } from "../components/layout/fetchSiteData";
 
 // Spinner
 const LoadingSpinner = () => <Loader2 className="animate-spin h-5 w-5 mr-2" />;
@@ -22,6 +23,8 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [shake, setShake] = useState(false);
+  const [site, setSite] = useState(null);
+  const whatsappNumber = normalizePhoneNumber(site?.whatsapp_number);
   useEffect(() => {
     const stored = localStorage.getItem("accessToken");
     if (stored) {
@@ -112,6 +115,13 @@ export default function Login() {
     );
   };
 
+  useEffect(() => {
+    (async () => {
+      const data = await fetchSiteData();
+      setSite(data);
+    })();
+  }, []);
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8">
       <div className="theme-card w-full max-w-md rounded-[32px] px-8 py-10 backdrop-blur">
@@ -188,7 +198,7 @@ export default function Login() {
         <p className="text-center text-gray-400 mt-5 text-sm">
           Need help?{" "}
           <a
-            href={`https://wa.me/${SUPPORT_PHONE}`}
+            href={`https://wa.me/${whatsappNumber}`}
             // href="https://wa.me/917726035987"
             className="text-[#f6b64b] underline underline-offset-3"
             target="_blank"

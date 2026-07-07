@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Editor } from "@tinymce/tinymce-react";
 import axios from "axios";
-import { API_URL, EditerApiKey } from "../../config";
+import { API_URL } from "../../config";
 
 export default function AdminHowToPlay() {
   const [content, setContent] = useState("");
@@ -37,7 +36,7 @@ export default function AdminHowToPlay() {
       });
 
       alert("How To Play Updated Successfully!");
-    } catch (err) {
+    } catch {
       alert("Error saving data.");
     }
 
@@ -53,7 +52,7 @@ export default function AdminHowToPlay() {
       setContent("");
       setVideoId("");
       alert("Deleted Successfully");
-    } catch (err) {
+    } catch {
       alert("Error deleting");
     }
   };
@@ -62,25 +61,12 @@ export default function AdminHowToPlay() {
     <div className=" mx-auto mt-2 p-3 rounded-xl shadow-lg text-white">
       <h1 className="text-xl font-semibold mb-4">How to Play Content</h1>
 
-      <Editor
-        apiKey={EditerApiKey}
+      <textarea
         value={content}
-        init={{
-          height: 320,
-          menubar: false,
-          skin: "oxide-dark",
-          content_css: "dark",
-          plugins: [
-            "advlist autolink lists link image charmap preview anchor",
-            "searchreplace visualblocks code fullscreen",
-            "insertdatetime media table paste help wordcount",
-          ],
-          toolbar:
-            "undo redo | formatselect | bold italic underline | " +
-            "alignleft aligncenter alignright alignjustify | " +
-            "bullist numlist outdent indent | removeformat",
-        }}
-        onEditorChange={(value) => setContent(value)}
+        onChange={(e) => setContent(e.target.value)}
+        rows={14}
+        spellCheck={false}
+        className="w-full rounded border border-gray-50/15 bg-[#1f2d3a] p-3 font-mono text-sm text-white outline-none focus:border-red-500"
       />
 
       {/* YouTube Input */}
