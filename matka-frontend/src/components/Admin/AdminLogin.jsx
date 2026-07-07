@@ -1,5 +1,5 @@
 // src/pages/AdminLoginPage.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   LogIn,
   User,
@@ -10,6 +10,8 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import logo from "../../assets/logo.png";
+import { normalizePhoneNumber } from "../../config";
+import { fetchSiteData } from "../layout/fetchSiteData";
 
 // STATIC ADMIN CREDENTIALS
 const ADMIN_MOBILE = "0987654321";
@@ -24,6 +26,15 @@ export default function AdminLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [shake, setShake] = useState(false);
+  const [site, setSite] = useState(null);
+  const whatsappNumber = normalizePhoneNumber(site?.whatsapp_number);
+
+  useEffect(() => {
+    (async () => {
+      const data = await fetchSiteData();
+      setSite(data);
+    })();
+  }, []);
 
   const showError = (text) => {
     setMessage({ type: "error", text });
@@ -158,7 +169,7 @@ export default function AdminLoginPage() {
         <p className="text-center text-gray-400 mt-5 text-sm">
           Need Assistance?{" "}
           <a
-            href="https://wa.me/918585918780"
+            href={`https://wa.me/${whatsappNumber}`}
             className="text-green-400 underline"
             target="_blank"
             rel="noreferrer"

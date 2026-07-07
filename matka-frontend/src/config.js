@@ -7,6 +7,11 @@ const resolveApiUrl = () => {
 
 export const API_URL = resolveApiUrl();
 export const SUPPORT_PHONE = "918585918780";
+export const normalizePhoneNumber = (value, fallback = SUPPORT_PHONE) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return fallback;
+  return digits.length === 10 ? `91${digits}` : digits;
+};
 // export const API_URL = "http://187.77.185.244:8000";
 
 // export const API_URL = "https://qbwm3635-8000.inc1.devtunnels.ms";

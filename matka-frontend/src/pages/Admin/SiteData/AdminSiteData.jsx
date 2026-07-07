@@ -1,7 +1,48 @@
 import React, { useEffect, useState } from "react";
 import { Editor } from "@tinymce/tinymce-react";
+import "tinymce/tinymce";
+import "tinymce/icons/default";
+import "tinymce/themes/silver";
+import "tinymce/models/dom";
+import "tinymce/skins/ui/oxide-dark/skin.min.css";
+import "tinymce/skins/content/dark/content.min.css";
+import "tinymce/plugins/advlist";
+import "tinymce/plugins/autolink";
+import "tinymce/plugins/lists";
+import "tinymce/plugins/link";
+import "tinymce/plugins/image";
+import "tinymce/plugins/charmap";
+import "tinymce/plugins/preview";
+import "tinymce/plugins/anchor";
+import "tinymce/plugins/searchreplace";
+import "tinymce/plugins/visualblocks";
+import "tinymce/plugins/code";
+import "tinymce/plugins/fullscreen";
+import "tinymce/plugins/insertdatetime";
+import "tinymce/plugins/media";
+import "tinymce/plugins/table";
+import "tinymce/plugins/help";
+import "tinymce/plugins/wordcount";
 import axios from "axios";
-import { API_URL, EditerApiKey } from "../../../config";
+import { API_URL } from "../../../config";
+
+const editorInit = {
+  height: 320,
+  menubar: false,
+  license_key: "gpl",
+  skin: false,
+  content_css: false,
+  content_style: "body { background: #1f2d3a; color: #f8fafc; }",
+  plugins: [
+    "advlist autolink lists link image charmap preview anchor",
+    "searchreplace visualblocks code fullscreen",
+    "insertdatetime media table help wordcount",
+  ],
+  toolbar:
+    "undo redo | bold italic underline | " +
+    "alignleft aligncenter alignright alignjustify | " +
+    "bullist numlist outdent indent | removeformat",
+};
 
 export default function AdminSiteData() {
   const API_BASE = API_URL;
@@ -172,22 +213,8 @@ export default function AdminSiteData() {
             onEditorChange={(v) =>
               setSiteData({ ...siteData, withdraw_money_html: v })
             }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
+            tinymceScriptSrc="/tinymce/tinymce.min.js"
+            init={editorInit}
           />
         </div>
 
@@ -199,23 +226,8 @@ export default function AdminSiteData() {
             onEditorChange={(v) =>
               setSiteData({ ...siteData, add_money_html: v })
             }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
-            // init={{ height: 200, menubar: false }}
+            tinymceScriptSrc="/tinymce/tinymce.min.js"
+            init={editorInit}
           />
         </div>
 
@@ -227,22 +239,8 @@ export default function AdminSiteData() {
             onEditorChange={(v) =>
               setSiteData({ ...siteData, notice_board_html: v })
             }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
+            tinymceScriptSrc="/tinymce/tinymce.min.js"
+            init={editorInit}
           />
         </div>
 
@@ -254,22 +252,8 @@ export default function AdminSiteData() {
             onEditorChange={(v) =>
               setSiteData({ ...siteData, withdraw_terms_html: v })
             }
-            apiKey={EditerApiKey}
-            init={{
-              height: 320,
-              menubar: false,
-              skin: "oxide-dark",
-              content_css: "dark",
-              plugins: [
-                "advlist autolink lists link image charmap preview anchor",
-                "searchreplace visualblocks code fullscreen",
-                "insertdatetime media table paste help wordcount",
-              ],
-              toolbar:
-                "undo redo | formatselect | bold italic underline | " +
-                "alignleft aligncenter alignright alignjustify | " +
-                "bullist numlist outdent indent | removeformat",
-            }}
+            tinymceScriptSrc="/tinymce/tinymce.min.js"
+            init={editorInit}
           />
         </div>
       </div>

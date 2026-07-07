@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Play, Star, Wallet, WalletCards } from "lucide-react";
 import { BsWhatsapp } from "react-icons/bs";
-import { API_URL, SUPPORT_PHONE } from "../config";
+import { API_URL, normalizePhoneNumber } from "../config";
 import axios from "axios";
 import MarketList from "./Client/MarketList";
 import { fetchSiteData } from "../components/layout/fetchSiteData";
@@ -12,6 +12,8 @@ export default function Dashboard() {
   const token = localStorage.getItem("accessToken");
   const [markets, setMarkets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [site, setSite] = useState(null);
+  const whatsappNumber = normalizePhoneNumber(site?.whatsapp_number);
   const [error, setError] = useState(null);
 
   // Redirect if NOT logged in
@@ -65,8 +67,6 @@ export default function Dashboard() {
   useEffect(() => {
     fetchMarkets();
   }, [fetchMarkets]);
-
-  const [site, setSite] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -155,7 +155,7 @@ export default function Dashboard() {
             </a>
 
             {/* <a
-              href={`https://wa.me/${SUPPORT_PHONE}`}
+              href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
               rel="noopener noreferrer"
               className="backdrop-blur-md px-3 py-1 mt-3 bg-white/30 flex items-center gap-2 text-sm rounded-full hover:bg-gray-700"
@@ -163,7 +163,7 @@ export default function Dashboard() {
               <BsWhatsapp /> Whatsapp
             </a> */}
             <a
-              href={`https://wa.me/${SUPPORT_PHONE}`}
+              href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-3 flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-sm font-semibold hover:border-red-500/40 hover:bg-red-950/20"

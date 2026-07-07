@@ -10,16 +10,20 @@ from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 class AddCORSHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        request_origin = request.headers.get("origin", "").rstrip("/")
+        allowed_origins = settings.cors_origins_list
+
         try:
             response = await call_next(request)
         except Exception as e:
-            # FORCE CORS even on error
             response = JSONResponse(
                 status_code=500,
                 content={"error": str(e)}
             )
 
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        if request_origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = request_origin
+            response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "*"
@@ -39,11 +43,7 @@ app = FastAPI(title="Matka Satka Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://game.natraj777.com",
-        "https://api.natraj777.com",
-    ],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
