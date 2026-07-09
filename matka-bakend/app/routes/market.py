@@ -1,13 +1,28 @@
 import json
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from ..models import Market
 
 from datetime import datetime
 
+IST = ZoneInfo("Asia/Kolkata")
+
 def to_time(t: str):
     """Convert '09:00 AM' → time object"""
     return datetime.strptime(t, "%I:%M %p").time()
+
+def is_market_running(open_time: str, close_time: str):
+    now = datetime.now(IST)
+    open_t = to_time(open_time)
+    close_t = to_time(close_time)
+    open_dt = now.replace(hour=open_t.hour, minute=open_t.minute, second=0, microsecond=0)
+    close_dt = now.replace(hour=close_t.hour, minute=close_t.minute, second=0, microsecond=0)
+
+    if close_dt > open_dt:
+        return now <= close_dt
+
+    return now >= open_dt or now <= close_dt
 
 def get_digit(num_str: str):
     """Return last digit of sum or '-'"""
@@ -90,11 +105,7 @@ def get_market(market_id: str):
     if not m:
         raise HTTPException(404, "Market not found")
 
-    now = datetime.now().time()
-    open_t = to_time(m.open_time)
-    close_t = to_time(m.close_time)
-
-    status = "Market Running" if open_t <= now <= close_t else "Market Closed"
+    status = "Market Running" if is_market_running(m.open_time, m.close_time) else "Market Closed"
     final_result = build_result(m.open_result, m.close_result)
 
     data = {
@@ -116,15 +127,10 @@ def get_market(market_id: str):
 @router.get("/")
 def get_all_markets():
 
-    now = datetime.now().time()
     markets = []
 
     for m in Market.objects.order_by("open_time"):
-
-        open_t = to_time(m.open_time)
-        close_t = to_time(m.close_time)
-
-        status = "Market Running" if open_t <= now <= close_t else "Market Closed"
+        status = "Market Running" if is_market_running(m.open_time, m.close_time) else "Market Closed"
         final_result = build_result(m.open_result, m.close_result)
 
         markets.append({

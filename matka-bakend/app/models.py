@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import uuid
 
 class User(Document):
-    meta = {"collection": "users"}
+    meta = {"collection": "users", "strict": False}
     username = StringField(required=True)
     mobile = StringField(required=True, unique=True)
     password_hash = StringField(required=True)

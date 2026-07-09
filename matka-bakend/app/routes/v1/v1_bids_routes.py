@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from ...models import Bid, Wallet, Market
 from ...auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/user/bid", tags=["User Bids"])
+IST = ZoneInfo("Asia/Kolkata")
 
 VALID_GAMES = [
     "single", "jodi", "single_panna", "double_panna", "triple_panna",
@@ -59,53 +61,18 @@ def validate_digit(game_type, digit):
 
 def compute_status(open_time: str, close_time: str):
     fmt = "%I:%M %p"
-    now = datetime.now()
+    now = datetime.now(IST)
 
-    # parse to time
     open_t = datetime.strptime(open_time, fmt).time()
     close_t = datetime.strptime(close_time, fmt).time()
 
-    # build datetime with today's date
     open_dt = now.replace(hour=open_t.hour, minute=open_t.minute, second=0, microsecond=0)
     close_dt = now.replace(hour=close_t.hour, minute=close_t.minute, second=0, microsecond=0)
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    next_midnight = midnight + timedelta(days=1)
 
-    # ----------------------------------------------------
-    # CASE A: Close time is SAME-DAY (close < 12 AM)
-    # ----------------------------------------------------
-    if close_dt > open_dt:  # normal same-day close
+    if close_dt > open_dt:
+        return now <= close_dt
 
-        # Now < open_time → OPEN (rule: early morning open)
-        if now < open_dt:
-            return True
-
-        # open <= now <= close → OPEN
-        if open_dt <= now <= close_dt:
-            return True
-
-        # now > close → CLOSED until midnight
-        if now > close_dt:
-            return False
-
-    # ----------------------------------------------------
-    # CASE B: Close time NEXT DAY (close < open)
-    # ----------------------------------------------------
-    else:
-        # close is next-day
-        close_dt = close_dt + datetime.timedelta(days=1)
-
-        # open_time <= now <= close_time(next day) → OPEN
-        if open_dt <= now <= close_dt:
-            return True
-
-        # After close → CLOSED
-        if now > close_dt:
-            return False
-
-        # AFTER midnight but before open_time → OPEN
-        if midnight <= now < open_dt:
-            return True
+    return now >= open_dt or now <= close_dt
 
 @router.post("/place")
 def place_bid(
@@ -138,14 +105,14 @@ def place_bid(
     def parse_time(t):
         return datetime.strptime(t, "%I:%M %p").time()
 
-    now_dt = datetime.now()
+    now_dt = datetime.now(IST)
     today = now_dt.date()
 
     open_time = parse_time(market.open_time)
     close_time = parse_time(market.close_time)
 
-    open_dt = datetime.combine(today, open_time)
-    close_dt = datetime.combine(today, close_time)
+    open_dt = datetime.combine(today, open_time, tzinfo=IST)
+    close_dt = datetime.combine(today, close_time, tzinfo=IST)
 
     # -------- HANDLE OVERNIGHT MARKET --------
     # Example: 10 PM to 2 AM

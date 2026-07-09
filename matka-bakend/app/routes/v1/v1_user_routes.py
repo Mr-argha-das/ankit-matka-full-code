@@ -10,13 +10,34 @@ from pydantic import BaseModel
 from ...auth import get_current_user, require_admin
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin user management"])
 
+def serialize_user(user: User):
+    created_at = user.created_at.isoformat() if user.created_at else None
+    last_login = user.last_login.isoformat() if user.last_login else None
+
+    return {
+        "id": str(user.id),
+        "user_id": str(user.id),
+        "_id": {"$oid": str(user.id)},
+        "username": user.username or "",
+        "mobile": user.mobile or "",
+        "role": user.role or "player",
+        "status": bool(user.status),
+        "is_bet": bool(user.is_bet),
+        "balance": user.balance or 0,
+        "created_at": created_at,
+        "last_login": last_login,
+        "referral_code": user.referral_code,
+        "referred_by": user.referred_by,
+    }
+
 @router.get("/users")
 def all_users(user=Depends(require_admin)):
     users = User.objects().order_by("-created_at")
+    data = [serialize_user(u) for u in users]
     return {
         "message": "Users fetched successfully",
-        "count": len(users),
-        "users": json.loads(users.to_json())
+        "count": len(data),
+        "users": data
     }
 
 class StatusUpdate(BaseModel):
@@ -48,20 +69,22 @@ def update_is_bet(user_id: str, payload: BetUpdate,user=Depends(require_admin)):
 @router.get("/users/status/disapprove")
 def inactive_users(user=Depends(require_admin)):
     users = User.objects(status=False)
+    data = [serialize_user(u) for u in users]
     return {
         "message": "Inactive users fetched successfully",
-        "count": len(users),
-        "users": json.loads(users.to_json())    
+        "count": len(data),
+        "users": data
     }
 
 # Approved Users
 @router.get("/users/status/approve")
 def active_users(user=Depends(require_admin)):
     users = User.objects(status=True)
+    data = [serialize_user(u) for u in users]
     return {
         "message": "Active users fetched successfully",
-        "count": len(users),
-        "users": json.loads(users.to_json())
+        "count": len(data),
+        "users": data
     }
 from datetime import datetime
 
@@ -74,10 +97,11 @@ def todays_logins(user=Depends(require_admin)):
     users = User.objects(last_login__gte=datetime.combine(today, datetime.min.time()),
                          last_login__lte=datetime.combine(today, datetime.max.time()))
 
+    data = [serialize_user(u) for u in users]
     return {
         "message": "Today's logins fetched successfully",
-        "count": len(users),
-        "users": json.loads(users.to_json())
+        "count": len(data),
+        "users": data
     }
 
 @router.get("/user/add-money")
@@ -196,11 +220,12 @@ def today_created_users(admin_user = Depends(require_admin)):
         created_at__gte=datetime.combine(today, datetime.min.time()),
         created_at__lte=datetime.combine(today, datetime.max.time())
     )
+    data = [serialize_user(u) for u in users]
 
     return {
         "message": "Today's created users fetched successfully",
-        "count": len(users),
-        "users": json.loads(users.to_json())
+        "count": len(data),
+        "users": data
     }
 
 @router.get("/user/win-history")

@@ -1,7 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import axios from "axios";
 import { Search, Eye, PhoneCall } from "lucide-react";
 import { API_URL } from "../../config";
+
+const getUserId = (user) => user.id || user.user_id || user._id?.$oid || "";
+
+const formatUserDate = (value) => {
+  const raw = value?.$date || value;
+  if (!raw) return "-";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
 export default function UserManagement() {
   const [search, setSearch] = useState("");
@@ -13,25 +29,21 @@ export default function UserManagement() {
   const token = localStorage.getItem("accessToken");
 
   // Fetch Users
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get(`${API_URL}/api/v1/admin/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const formatted = res.data.users.map((u) => ({
-        id: u._id.$oid,
-        username: u.username,
-        mobile: u.mobile,
-        role: u.role,
-        status: u.status,
-        is_bet: u.is_bet,
-        date: new Date(u.created_at.$date).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
+      const formatted = (res.data.users || []).map((u) => ({
+        id: getUserId(u),
+        username: u.username || "",
+        mobile: String(u.mobile || ""),
+        role: u.role || "player",
+        status: Boolean(u.status),
+        is_bet: Boolean(u.is_bet),
+        date: formatUserDate(u.created_at),
       }));
 
       setUsers(formatted);
@@ -40,11 +52,11 @@ export default function UserManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
   // Status Toggle
   const toggleStatus = async (id, current) => {
@@ -77,8 +89,8 @@ export default function UserManagement() {
   // Search Filter
   const filteredUsers = users.filter(
     (u) =>
-      u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.mobile.includes(search)
+      String(u.username || "").toLowerCase().includes(search.toLowerCase()) ||
+      String(u.mobile || "").includes(search)
   );
 
   const totalPages = Math.ceil(filteredUsers.length / limit);
