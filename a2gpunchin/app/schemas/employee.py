@@ -32,9 +32,13 @@ class EmployeeCreate(BaseModel):
     note: str | None = None
     aadhar_number: str | None = None
     pan_number: str | None = None
+    bank_name: str | None = None
+    account_number: str | None = None
+    ifsc_code: str | None = None
     face_embedding: list[float] | None = None
     portal_access: bool = False
     access_level: str | None = None
+    module_access: list[str] | None = None
     login_password: str | None = None
 
 
@@ -66,10 +70,14 @@ class EmployeeUpdate(BaseModel):
     note: str | None = None
     aadhar_number: str | None = None
     pan_number: str | None = None
+    bank_name: str | None = None
+    account_number: str | None = None
+    ifsc_code: str | None = None
     face_embedding: list[float] | None = None
     status: str | None = None
     portal_access: bool | None = None
     access_level: str | None = None
+    module_access: list[str] | None = None
     login_password: str | None = None
 
 

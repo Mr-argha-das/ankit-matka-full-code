@@ -1,9 +1,12 @@
+import threading
+import time as monotonic_time
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 
 from app.core.config import settings
+from app.core.tenant import current_company_id, current_is_super_admin, current_tenant_id, current_user_id, tenant_context
 from app.models.attendance import Attendance
 from app.models.branch import Branch
 from app.models.employee import Employee
@@ -15,9 +18,44 @@ from app.utils.geo import within_geofence
 
 class AttendanceService(BaseService):
     search_fields = ["attendance_status", "ip_address"]
+    select_related_depth = 2
+    _maintenance_lock = threading.Lock()
+    _last_maintenance_at_by_scope: dict[tuple[str | None, str | None, bool], float] = {}
 
     def __init__(self):
         super().__init__(BaseRepository(Attendance))
+
+    def queueable_maintenance_context(self) -> dict:
+        return tenant_context()
+
+    def run_request_maintenance(self, context: dict | None = None, max_age_seconds: int = 300) -> bool:
+        context = context or {}
+        scope = (
+            context.get("tenant_id"),
+            context.get("company_id"),
+            bool(context.get("is_super_admin")),
+        )
+        now = monotonic_time.monotonic()
+        with self._maintenance_lock:
+            last_run = self._last_maintenance_at_by_scope.get(scope, 0)
+            if now - last_run < max_age_seconds:
+                return False
+            self._last_maintenance_at_by_scope[scope] = now
+
+        tenant_token = current_tenant_id.set(context.get("tenant_id"))
+        company_token = current_company_id.set(context.get("company_id"))
+        user_token = current_user_id.set(context.get("user_id"))
+        super_token = current_is_super_admin.set(bool(context.get("is_super_admin")))
+        try:
+            self.sync_missing_face_attendance_records(limit=100)
+            self.auto_punch_out_overdue()
+            self.recalculate_existing_attendance(limit=100)
+            return True
+        finally:
+            current_tenant_id.reset(tenant_token)
+            current_company_id.reset(company_token)
+            current_user_id.reset(user_token)
+            current_is_super_admin.reset(super_token)
 
     def _employee_for_user(self, user: User) -> Employee:
         employee = Employee.objects.visible().filter(user_id=user).first() or Employee.objects.visible().filter(email=user.email).first()

@@ -14,6 +14,7 @@ class User(BaseDocument):
     phone = StringField()
     roles = ListField(ReferenceField(Role))
     access_level = StringField(default="employee", choices=("admin", "manager", "tl", "employee"))
+    module_access = ListField(StringField())
     is_super_admin = BooleanField(default=False)
     is_email_verified = BooleanField(default=False)
     status = StringField(default="active", choices=("active", "inactive", "locked"))

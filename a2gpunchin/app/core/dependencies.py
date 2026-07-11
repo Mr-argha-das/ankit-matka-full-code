@@ -30,6 +30,10 @@ def require_permissions(*permissions: str):
     def checker(user: User = Depends(get_current_user)) -> User:
         if user.is_super_admin:
             return user
+        from app.services.access_control import access_level_for_user
+
+        if access_level_for_user(user) == "admin":
+            return user
         granted = {permission.code for role in user.roles for permission in role.permissions}
         missing = [permission for permission in permissions if permission not in granted]
         if missing:

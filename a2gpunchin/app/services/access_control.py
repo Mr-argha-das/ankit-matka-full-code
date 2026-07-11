@@ -15,8 +15,11 @@ ACCESS_LEVEL_LABELS = {
     "employee": "Employee Self",
 }
 
+MODULE_CODES = {"assets", "branches", "departments", "employees", "shifts", "attendance", "leaves", "reports"}
+
 ROLE_PERMISSIONS = {
     "admin": [
+        "assets:create", "assets:read", "assets:update", "assets:delete",
         "branches:create", "branches:read", "branches:update", "branches:delete",
         "departments:create", "departments:read", "departments:update", "departments:delete",
         "employees:create", "employees:read", "employees:update", "employees:delete",
@@ -26,13 +29,21 @@ ROLE_PERMISSIONS = {
         "reports:read",
     ],
     "manager": [
+        "assets:read",
+        "branches:read",
+        "departments:read",
         "employees:read",
+        "shifts:read",
         "attendance:read",
         "leaves:create", "leaves:read", "leaves:approve",
         "reports:read",
     ],
     "tl": [
+        "assets:read",
+        "branches:read",
+        "departments:read",
         "employees:read",
+        "shifts:read",
         "attendance:read",
         "leaves:create", "leaves:read", "leaves:approve",
         "reports:read",
@@ -59,6 +70,21 @@ def normalize_access_level(value: str | None) -> str:
     return normalized if normalized in ACCESS_LEVEL_LABELS else "employee"
 
 
+def normalize_modules(values: list[str] | tuple[str, ...] | str | None) -> list[str]:
+    if not values:
+        return []
+    if isinstance(values, str):
+        values = [values]
+    modules = []
+    for value in values:
+        module = str(value or "").strip().lower()
+        if module == "leave":
+            module = "leaves"
+        if module in MODULE_CODES and module not in modules:
+            modules.append(module)
+    return modules
+
+
 def _permission(code: str, tenant_id: str, company_id: str | None) -> Permission:
     permission = Permission.objects(code=code).first()
     if permission:
@@ -72,11 +98,16 @@ def _permission(code: str, tenant_id: str, company_id: str | None) -> Permission
     ).save()
 
 
-def role_for_access_level(access_level: str, tenant_id: str, company_id: str | None) -> Role:
+def role_for_access_level(access_level: str, tenant_id: str, company_id: str | None, module_access: list[str] | None = None) -> Role:
     access_level = normalize_access_level(access_level)
-    slug = f"dashboard-{access_level}-{company_id or tenant_id}"
+    modules = normalize_modules(module_access)
+    module_key = "-".join(modules) if modules else "default"
+    slug = f"dashboard-{access_level}-{module_key}-{company_id or tenant_id}"
     role = Role.objects(slug=slug, tenant_id=tenant_id, company_id=company_id).first()
-    permissions = [_permission(code, tenant_id, company_id) for code in ROLE_PERMISSIONS[access_level]]
+    codes = ROLE_PERMISSIONS[access_level]
+    if modules:
+        codes = [code for code in codes if code.split(":", 1)[0] in modules]
+    permissions = [_permission(code, tenant_id, company_id) for code in codes]
     if role:
         role.permissions = permissions
         role.name = ACCESS_LEVEL_LABELS[access_level]
@@ -119,17 +150,25 @@ def scoped_employees_for_user(user: User) -> list[Employee] | None:
     if not employee:
         return []
     if access_level in {"manager", "tl"}:
-        team = list(Employee.objects.visible().filter(reporting_manager=employee))
-        return [employee, *team]
+        if not employee.department_id:
+            return [employee]
+        return list(Employee.objects.visible().filter(department_id=employee.department_id))
     return [employee]
 
 
-def sync_employee_user(employee: Employee, access_enabled: bool, access_level: str, password: str | None = None) -> User | None:
+def modules_for_user(user: User) -> set[str]:
+    if user.is_super_admin or access_level_for_user(user) == "admin":
+        return set(MODULE_CODES) | {"companies", "subscriptions", "settings"}
+    return {permission.code.split(":", 1)[0] for role in user.roles for permission in role.permissions}
+
+
+def sync_employee_user(employee: Employee, access_enabled: bool, access_level: str, password: str | None = None, module_access: list[str] | None = None) -> User | None:
     access_level = normalize_access_level(access_level or employee.staff_role)
     if not access_enabled:
         return employee.user_id
 
-    role = role_for_access_level(access_level, employee.tenant_id, employee.company_id)
+    modules = normalize_modules(module_access)
+    role = role_for_access_level(access_level, employee.tenant_id, employee.company_id, modules)
     employee_email = employee.email.lower()
     existing_user = User.objects(email=employee_email, is_active=True).first()
     user = employee.user_id or existing_user
@@ -148,6 +187,7 @@ def sync_employee_user(employee: Employee, access_enabled: bool, access_level: s
             phone=employee.phone,
             roles=[role],
             access_level=access_level,
+            module_access=modules,
             is_email_verified=True,
         )
     else:
@@ -157,11 +197,15 @@ def sync_employee_user(employee: Employee, access_enabled: bool, access_level: s
         user.phone = employee.phone
         user.roles = [role]
         user.access_level = access_level
+        user.module_access = modules
         user.status = "active"
         if password:
             user.password_hash = hash_password(password)
     user.save()
 
     employee.user_id = user
+    employee.portal_access = True
+    employee.access_level = access_level
+    employee.module_access = modules
     employee.save()
     return user

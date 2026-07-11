@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.core.security import decode_token
 from app.models.user import User
-from app.services.access_control import access_level_for_user
+from app.services.access_control import access_level_for_user, modules_for_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -34,7 +34,8 @@ def home(request: Request):
     if isinstance(user, RedirectResponse):
         return user
     access_level = access_level_for_user(user)
-    return templates.TemplateResponse("dashboard/index.html", {"request": request, "title": "Dashboard", "user": user, "access_level": access_level})
+    modules = modules_for_user(user)
+    return templates.TemplateResponse("dashboard/index.html", {"request": request, "title": "Dashboard", "user": user, "access_level": access_level, "modules": modules})
 
 
 @router.get("/login")
@@ -49,12 +50,24 @@ def page(request: Request, page_name: str):
     user = require_web_login(request)
     if isinstance(user, RedirectResponse):
         return user
-    allowed = {"companies", "branches", "departments", "employees", "attendance", "leave", "reports", "settings", "shifts"}
+    allowed = {"companies", "branches", "departments", "employees", "assets", "attendance", "leave", "reports", "settings", "shifts"}
     access_level = access_level_for_user(user)
-    if access_level == "employee":
-        allowed = {"attendance", "leave"}
-    elif access_level in {"manager", "tl"}:
-        allowed = {"employees", "attendance", "leave", "reports"}
+    modules = modules_for_user(user)
+    if access_level != "admin":
+        allowed = set()
+        module_pages = {
+            "assets": "assets",
+            "employees": "employees",
+            "attendance": "attendance",
+            "leaves": "leave",
+            "reports": "reports",
+            "branches": "branches",
+            "departments": "departments",
+            "shifts": "shifts",
+        }
+        allowed = {page for module, page in module_pages.items() if module in modules}
+        if not allowed:
+            allowed = {"attendance"}
     if page_name not in allowed:
         return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
-    return templates.TemplateResponse(f"{page_name}/index.html", {"request": request, "title": page_name.title(), "user": user, "access_level": access_level})
+    return templates.TemplateResponse(f"{page_name}/index.html", {"request": request, "title": page_name.title(), "user": user, "access_level": access_level, "modules": modules})

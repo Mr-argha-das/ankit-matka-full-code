@@ -10,7 +10,20 @@ from app.models.user import User
 
 
 class Employee(BaseDocument):
-    meta = {"collection": "employees", "indexes": ["tenant_id", "company_id", "employee_code", "branch_id", "department_id", {"fields": ["tenant_id", "company_id", "employee_code"], "unique": True}]}
+    meta = {
+        "collection": "employees",
+        "indexes": [
+            "tenant_id",
+            "company_id",
+            "employee_code",
+            "branch_id",
+            "department_id",
+            ("tenant_id", "company_id", "status"),
+            ("tenant_id", "company_id", "status", "face_enrolled"),
+            ("tenant_id", "company_id", "status", "branch_id"),
+            {"fields": ["tenant_id", "company_id", "employee_code"], "unique": True},
+        ],
+    }
 
     employee_code = StringField(required=True)
     prefix = StringField()
@@ -33,6 +46,9 @@ class Employee(BaseDocument):
     shift_id = ReferenceField(Shift)
     reporting_manager = ReferenceField("Employee")
     user_id = ReferenceField(User)
+    portal_access = BooleanField(default=False)
+    access_level = StringField(default="employee", choices=("admin", "manager", "tl", "employee"))
+    module_access = ListField(StringField())
     profile_photo = StringField()
     current_address = StringField()
     permanent_address = StringField()
@@ -41,6 +57,9 @@ class Employee(BaseDocument):
     note = StringField()
     aadhar_number = StringField()
     pan_number = StringField()
+    bank_name = StringField()
+    account_number = StringField()
+    ifsc_code = StringField()
     face_embedding = ListField(FloatField())
     face_enrolled = BooleanField(default=False)
     documents = ListField(StringField())

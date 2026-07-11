@@ -7,7 +7,21 @@ from app.models.shift import Shift
 
 
 class Attendance(BaseDocument):
-    meta = {"collection": "attendance", "indexes": ["tenant_id", "company_id", "employee_id", "attendance_date", "attendance_status"]}
+    meta = {
+        "collection": "attendance",
+        "indexes": [
+            "tenant_id",
+            "company_id",
+            "employee_id",
+            "attendance_date",
+            "attendance_status",
+            ("tenant_id", "company_id", "attendance_date"),
+            ("tenant_id", "company_id", "attendance_date", "attendance_status"),
+            ("tenant_id", "company_id", "attendance_date", "check_in_status"),
+            ("tenant_id", "company_id", "attendance_date", "branch_id"),
+            ("tenant_id", "company_id", "employee_id", "attendance_date"),
+        ],
+    }
 
     employee_id = ReferenceField(Employee, required=True)
     branch_id = ReferenceField(Branch, required=True)

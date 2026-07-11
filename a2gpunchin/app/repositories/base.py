@@ -19,6 +19,7 @@ class BaseRepository(Generic[ModelT]):
         page: int = 1,
         page_size: int = 20,
         sort: str = "-created_at",
+        select_related_depth: int | None = None,
     ) -> tuple[list[ModelT], int]:
         query = self.model.objects.visible()
         if filters:
@@ -30,6 +31,8 @@ class BaseRepository(Generic[ModelT]):
             query = query.filter(search_query)
         total = query.count()
         items = query.order_by(sort).skip((page - 1) * page_size).limit(page_size)
+        if select_related_depth:
+            items = items.select_related(max_depth=select_related_depth)
         return list(items), total
 
     def get(self, object_id: str) -> ModelT:

@@ -13,7 +13,9 @@ function toast(message, tone = "success") {
 }
 
 async function apiFetch(url, options = {}) {
-  const response = await fetch(url, {...options, credentials: "same-origin", headers: {...authHeaders(), ...(options.headers || {})}});
+  const isFormData = options.body instanceof FormData;
+  const headers = {...(isFormData ? {} : authHeaders()), ...(options.headers || {})};
+  const response = await fetch(url, {...options, credentials: "same-origin", headers});
   if (!response.ok) {
     let detail = "Request failed";
     const text = await response.text();
@@ -34,7 +36,13 @@ async function apiFetch(url, options = {}) {
 function formBody(form) {
   const body = Object.fromEntries(new FormData(form).entries());
   form.querySelectorAll("input[type='checkbox']").forEach((input) => {
-    body[input.name] = input.checked;
+    if (!input.name) return;
+    const group = form.querySelectorAll(`input[type='checkbox'][name='${CSS.escape(input.name)}']`);
+    if (group.length > 1) {
+      body[input.name] = Array.from(group).filter((item) => item.checked).map((item) => item.value);
+    } else {
+      body[input.name] = input.checked;
+    }
   });
   Object.keys(body).forEach((key) => {
     if (body[key] === "") delete body[key];
@@ -45,6 +53,7 @@ function formBody(form) {
   if (body.portal_access !== true && body.portal_access !== "true") {
     delete body.login_password;
     delete body.access_level;
+    delete body.module_access;
   }
   return body;
 }
@@ -157,9 +166,273 @@ function renderPager(table, result) {
   pager.querySelector(".table-page-size").value = String(pageSize);
 }
 
+function employeeInitials(item) {
+  const first = String(item.first_name || "").trim()[0] || "";
+  const last = String(item.last_name || "").trim()[0] || "";
+  return `${first}${last}`.toUpperCase() || String(item.employee_code || "E").trim()[0] || "E";
+}
+
+function employeeCardStatusClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("terminated") || normalized.includes("inactive")) return "employee-card__status--danger";
+  if (normalized.includes("active")) return "employee-card__status--active";
+  return "employee-card__status--muted";
+}
+
+function displayNameWithoutCode(value) {
+  return String(value || "-").replace(/\s*\([^)]*\)\s*$/, "") || "-";
+}
+
+function compactValue(value) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "-";
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return value === undefined || value === null || value === "" ? "-" : value;
+}
+
+function formatShortDate(value) {
+  if (!value || value === "-") return "-";
+  const text = String(value);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[3]}-${match[2]}-${match[1].slice(2)}`;
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const year = String(parsed.getFullYear()).slice(2);
+    return `${day}-${month}-${year}`;
+  }
+  const named = text.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (named) {
+    const months = {jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"};
+    return `${named[1].padStart(2, "0")}-${months[named[2].toLowerCase()] || named[2]}-${named[3].slice(2)}`;
+  }
+  return text;
+}
+
+function formatDateTime(value) {
+  if (!value || value === "-") return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = String(parsed.getFullYear()).slice(2);
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  return `${day}-${month}-${year} ${hours}:${minutes}`;
+}
+
+function employeeViewField(label, value) {
+  return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(compactValue(value))}</strong></div>`;
+}
+
+function employeeViewSection(title, fields) {
+  return `
+    <section class="employee-view__section">
+      <h4 class="employee-view__section-title">${escapeHtml(title)}</h4>
+      <div class="employee-view__grid">
+        ${fields.map(([label, value]) => employeeViewField(label, value)).join("")}
+      </div>
+    </section>`;
+}
+
+function employeeAssetList(assets) {
+  if (!assets.length) {
+    return `<div class="employee-view__empty">No assets assigned</div>`;
+  }
+  return `
+    <div class="employee-view__assets">
+      ${assets.map((asset) => `
+        <div class="employee-view__asset">
+          <strong>${escapeHtml(asset.asset_name || asset.asset_id || "Asset")}</strong>
+          <span>${escapeHtml(asset.asset_type || "-")} · ${escapeHtml(asset.status || "-")}</span>
+          <span>${escapeHtml(asset.brand_model || "-")} · ${escapeHtml(asset.serial_number || "-")}</span>
+        </div>
+      `).join("")}
+    </div>`;
+}
+
+function employeeDocumentList(documents) {
+  if (!documents.length) {
+    return `<div class="employee-view__empty">No documents uploaded</div>`;
+  }
+  return `
+    <div class="employee-document-list__items">
+      ${documents.map((document) => `
+        <div class="employee-document-item">
+          <div>
+            <strong>${escapeHtml(document.document_name || "Document")}</strong>
+            <span>${escapeHtml(document.original_filename || "-")}</span>
+            <span>Uploaded ${escapeHtml(formatDateTime(document.uploaded_at))}</span>
+          </div>
+          <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(document.download_url)}">Download</a>
+        </div>
+      `).join("")}
+    </div>`;
+}
+
+async function loadEmployeeDocuments(employeeId) {
+  const result = await apiFetch(`/api/employees/${employeeId}/documents`);
+  return result.items || [];
+}
+
+async function openEmployeeDocuments(item) {
+  const modal = document.getElementById("employeeDocumentsModal");
+  const form = document.getElementById("employeeDocumentForm");
+  const list = document.getElementById("employeeDocumentList");
+  if (!modal || !form || !list) return;
+  form.dataset.employeeId = item.id;
+  form.reset();
+  list.innerHTML = `<div class="employee-card-empty">Loading documents...</div>`;
+  new bootstrap.Modal(modal).show();
+  try {
+    list.innerHTML = employeeDocumentList(await loadEmployeeDocuments(item.id));
+  } catch (error) {
+    list.innerHTML = `<div class="employee-card-empty">${escapeHtml(error.message || "Unable to load documents")}</div>`;
+  }
+}
+
+function renderEmployeeView(summary, detail, assets, documents = []) {
+  const item = {...summary, ...detail};
+  const fullName = [item.first_name, item.last_name].filter(Boolean).join(" ") || "Employee";
+  const department = displayNameWithoutCode(summary.department || item.department_id);
+  const branch = displayNameWithoutCode(summary.branch || item.branch_id);
+  const shift = summary.shift || item.shift_id;
+  const bankingFields = [
+    ["Account Holder", item.account_holder_name || item.bank_account_name],
+    ["Bank Name", item.bank_name],
+    ["Account Number", item.account_number || item.bank_account_number],
+    ["IFSC Code", item.ifsc_code || item.bank_ifsc],
+    ["UAN", item.uan],
+    ["PF Number", item.pf_number],
+    ["ESI Number", item.esi_number],
+  ].filter(([, value]) => compactValue(value) !== "-");
+  return `
+    <div class="employee-view">
+      <div class="employee-view__head">
+        <div class="employee-card__avatar">${escapeHtml(employeeInitials(item))}</div>
+        <div>
+          <h3>${escapeHtml(fullName)}</h3>
+          <p>${escapeHtml(item.employee_code || "-")} · ${escapeHtml(item.designation || "No designation")}</p>
+        </div>
+        <span class="employee-card__status ${employeeCardStatusClass(item.status)}">${escapeHtml(item.status || "-")}</span>
+      </div>
+      ${employeeViewSection("Personal Details", [
+        ["First Name", item.first_name],
+        ["Last Name", item.last_name],
+        ["Father Name", item.father_name],
+        ["Mother Name", item.mother_name],
+        ["Date of Birth", formatShortDate(item.date_of_birth)],
+        ["Gender", item.gender],
+        ["Marital Status", item.marital_status],
+        ["Phone", item.phone],
+        ["Emergency Contact", item.emergency_contact_number],
+        ["Email", item.email],
+        ["Current Address", item.current_address],
+        ["Permanent Address", item.permanent_address],
+      ])}
+      ${employeeViewSection("Official Details", [
+        ["Staff ID", item.employee_code],
+        ["Role", item.staff_role],
+        ["Designation", item.designation],
+        ["Department", department],
+        ["Branch", branch],
+        ["Shift", shift],
+        ["Joining Date", formatShortDate(item.joining_date)],
+        ["Status", item.status],
+        ["Office Email", item.office_email],
+        ["Face Enrollment", summary.face || (item.face_enrolled ? "Enrolled" : "Not Enrolled")],
+        ["Portal Access", item.portal_access],
+        ["Access Level", item.access_level],
+        ["Modules", item.module_access],
+      ])}
+      ${employeeViewSection("Banking Details", bankingFields.length ? bankingFields : [["Banking Details", "No banking details available"]])}
+      ${employeeViewSection("Documents & Other Details", [
+        ["Aadhar Number", item.aadhar_number],
+        ["PAN Number", item.pan_number],
+        ["Qualification", item.qualification],
+        ["Work Experience", item.work_experience],
+        ["Note", item.note],
+        ["Profile Photo", item.profile_photo],
+      ])}
+      <section class="employee-view__section">
+      <h4 class="employee-view__section-title">Document Rack</h4>
+      ${employeeDocumentList(documents)}
+      </section>
+      <section class="employee-view__section">
+      <h4 class="employee-view__section-title">Allocated Assets</h4>
+      ${employeeAssetList(assets)}
+      </section>
+    </div>`;
+}
+
+function renderEmployeeCards(container, result) {
+  renderPager(container, result);
+  const items = result.items || [];
+  const countLabel = document.getElementById("employeeCountLabel");
+  if (countLabel) {
+    const total = Number(result.total || 0);
+    countLabel.innerHTML = total ? `<span class="count-accent">${total}</span> Employee` : "Employee";
+  }
+  container.innerHTML = "";
+  if (!items.length) {
+    container.innerHTML = `<div class="employee-card-empty">No employees found</div>`;
+    return;
+  }
+  const editModal = container.dataset.editModal;
+  const editTitle = container.dataset.editTitle || "Edit Employee";
+  container.innerHTML = items.map((item) => {
+    const fullName = [item.first_name, item.last_name].filter(Boolean).join(" ") || "Employee";
+    const encoded = encodeURIComponent(JSON.stringify(item));
+    const api = `${container.dataset.api}/${item.id}`;
+    const statusClass = employeeCardStatusClass(item.status);
+    return `
+      <article class="employee-card" data-employee="${encoded}">
+        
+        <div class="employee-card__portrait">
+          <div class="employee-card__avatar">
+            ${escapeHtml(employeeInitials(item))}
+            <span class="employee-card__presence ${statusClass}"></span>
+          </div>
+          <div class="employee-card__identity">
+            <strong>${escapeHtml(fullName)}</strong>
+            <span>${escapeHtml(item.designation || item.staff_role || "Employee")}</span>
+            <span class="employee-card__code">${escapeHtml(item.employee_code || "-")}</span>
+          </div>
+        </div>
+      
+        <div class="employee-card__meta employee-card__meta--split">
+          <div><span>Department</span><strong>${escapeHtml(displayNameWithoutCode(item.department))}</strong></div>
+          <div><span>Hired Date</span><strong>${escapeHtml(formatShortDate(item.joining_date))}</strong></div>
+        </div>
+        <div class="employee-card__contact">
+          <span>✉ ${escapeHtml(item.email || "-")}</span>
+          <span>☎ ${escapeHtml(item.phone || "-")}</span>
+        </div>
+        <div class="employee-card__footer">
+          <div>
+            <button class="btn btn-sm btn-outline-secondary employee-view-button" type="button">View</button>
+            <button class="btn btn-sm btn-outline-secondary employee-documents-button" type="button">Docs</button>
+            <button class="btn btn-sm btn-outline-primary table-edit-button" type="button" data-api="${escapeHtml(api)}" data-modal="${escapeHtml(editModal || "")}" data-title="${escapeHtml(editTitle)}">Edit</button>
+          </div>
+        </div>
+      </article>`;
+  }).join("");
+}
+
 async function hydrateDataTable(table) {
   if (!table.dataset.page) table.dataset.page = "1";
   ensurePager(table);
+  if (table.dataset.view === "employee-cards") {
+    table.innerHTML = `<div class="employee-card-empty">Loading employees...</div>`;
+    try {
+      const result = await apiFetch(tableUrl(table));
+      renderEmployeeCards(table, result);
+    } catch (error) {
+      table.innerHTML = `<div class="employee-card-empty">${escapeHtml(error.message || "Unable to load employees")}</div>`;
+    }
+    return;
+  }
   const columns = (table.dataset.columns || "").split(",").map((column) => column.trim()).filter(Boolean);
   const columnCount = table.querySelectorAll("thead th").length || columns.length || 1;
   const body = table.querySelector("tbody") || table.createTBody();
@@ -267,22 +540,32 @@ async function loadDatalistOptions() {
   }));
 }
 
+const optionItemsCache = new Map();
+
 async function loadOptionItems(source, loadAll = false) {
-  if (!loadAll) {
-    const result = await apiFetch(source);
-    return result.items || [];
+  const cacheKey = `${source}|${loadAll ? "all" : "page"}`;
+  if (optionItemsCache.has(cacheKey)) {
+    return optionItemsCache.get(cacheKey);
   }
-  const items = [];
-  let page = 1;
-  let total = 0;
-  do {
-    const separator = source.includes("?") ? "&" : "?";
-    const result = await apiFetch(`${source}${separator}page=${page}&page_size=100`);
-    items.push(...(result.items || []));
-    total = Number(result.total || items.length);
-    page += 1;
-  } while (items.length < total);
-  return items;
+  const request = (async () => {
+    if (!loadAll) {
+      const result = await apiFetch(source);
+      return result.items || [];
+    }
+    const items = [];
+    let page = 1;
+    let total = 0;
+    do {
+      const separator = source.includes("?") ? "&" : "?";
+      const result = await apiFetch(`${source}${separator}page=${page}&page_size=100`);
+      items.push(...(result.items || []));
+      total = Number(result.total || items.length);
+      page += 1;
+    } while (items.length < total);
+    return items;
+  })();
+  optionItemsCache.set(cacheKey, request);
+  return request;
 }
 
 document.addEventListener("change", (event) => {
@@ -311,11 +594,21 @@ function resetAjaxForm(form) {
 }
 
 function fillForm(form, data) {
+  form.querySelectorAll("input[type='checkbox']").forEach((input) => {
+    input.checked = false;
+  });
   Object.entries(data).forEach(([key, value]) => {
     const input = form.elements[key];
     if (!input) return;
     if (input.type === "password") {
       input.value = "";
+      return;
+    }
+    if (input instanceof RadioNodeList) {
+      const values = Array.isArray(value) ? value.map(String) : [];
+      Array.from(input).forEach((item) => {
+        if (item.type === "checkbox") item.checked = values.includes(item.value);
+      });
       return;
     }
     if (input.type === "checkbox") {
@@ -334,6 +627,38 @@ document.addEventListener("click", async (event) => {
     if (form) resetAjaxForm(form);
     const title = modal?.querySelector(".modal-title");
     if (title) title.textContent = addButton.dataset.createTitle || "Add";
+    return;
+  }
+
+  const viewButton = event.target.closest(".employee-view-button");
+  if (viewButton) {
+    const card = viewButton.closest(".employee-card");
+    const body = document.getElementById("employeeViewBody");
+    const modal = document.getElementById("employeeViewModal");
+    if (!card || !body || !modal) return;
+    const item = JSON.parse(decodeURIComponent(card.dataset.employee || "%7B%7D"));
+    const modalInstance = new bootstrap.Modal(modal);
+    body.innerHTML = `<div class="employee-card-empty">Loading employee details...</div>`;
+    modalInstance.show();
+    try {
+      const [detail, assetResult, documents] = await Promise.all([
+        apiFetch(`/api/employees/${item.id}`),
+        apiFetch(`/api/assets?employee_id=${encodeURIComponent(item.id)}&page_size=100`).catch(() => ({items: []})),
+        loadEmployeeDocuments(item.id).catch(() => []),
+      ]);
+      body.innerHTML = renderEmployeeView(item, detail, assetResult.items || [], documents);
+    } catch (error) {
+      body.innerHTML = `<div class="employee-card-empty">${escapeHtml(error.message || "Unable to load employee details")}</div>`;
+    }
+    return;
+  }
+
+  const docsButton = event.target.closest(".employee-documents-button");
+  if (docsButton) {
+    const card = docsButton.closest(".employee-card");
+    if (!card) return;
+    const item = JSON.parse(decodeURIComponent(card.dataset.employee || "%7B%7D"));
+    await openEmployeeDocuments(item);
     return;
   }
 
@@ -366,6 +691,20 @@ document.addEventListener("submit", async (event) => {
       localStorage.removeItem("tenant_id");
       localStorage.removeItem("company_id");
       window.location.href = "/";
+    }
+    if (event.target.id === "employeeDocumentForm") {
+      event.preventDefault();
+      const employeeId = event.target.dataset.employeeId;
+      const list = document.getElementById("employeeDocumentList");
+      if (!employeeId) throw new Error("Employee is not selected");
+      const body = new FormData(event.target);
+      await apiFetch(`/api/employees/${employeeId}/documents`, {method: "POST", body});
+      event.target.reset();
+      if (list) {
+        list.innerHTML = employeeDocumentList(await loadEmployeeDocuments(employeeId));
+      }
+      toast("Document uploaded");
+      return;
     }
     if (event.target.classList.contains("ajax-form")) {
       event.preventDefault();

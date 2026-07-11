@@ -3,7 +3,7 @@
 <div class="module-head">
   <div>
     <span class="eyebrow">Employee Directory</span>
-    <h2>Employees & face enrollment</h2>
+    <h2 id="employeeCountLabel">Employees</h2>
     <p>Add employees, assign branch and shift, and keep face enrollment ready for kiosk-based attendance.</p>
   </div>
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#employeeModal" data-create-modal="#employeeModal" data-create-title="Employee">Add Employee</button>
@@ -31,6 +31,12 @@
       </select>
     </div>
     <div class="col-md-3">
+      <label class="form-label">Department</label>
+      <select class="form-select option-loader" name="department_id" data-source="/api/departments" data-kind="department">
+        <option value="">All departments</option>
+      </select>
+    </div>
+    <div class="col-md-3">
       <label class="form-label">Status</label>
       <select class="form-select" name="status">
         <option value="">All status</option>
@@ -51,10 +57,43 @@
   <div class="panel-title">
     <div><span class="eyebrow">People</span><h3>Employee roster</h3></div>
   </div>
-  <table id="employeesTable" class="table table-striped data-table" data-api="/api/employees" data-edit-modal="#employeeModal" data-edit-title="Edit Employee" data-page-size="25" data-page-sizes="25,50,75,100" data-columns="employee_code,first_name,last_name,staff_role,designation,department,branch,shift,phone,email,face,access,status,actions">
-    <thead><tr><th>Staff ID</th><th>First Name</th><th>Last Name</th><th>Role</th><th>Designation</th><th>Department</th><th>Branch</th><th>Shift</th><th>Phone</th><th>Email</th><th>Face</th><th>Access</th><th>Status</th><th>Actions</th></tr></thead>
-  </table>
+  <div id="employeesTable" class="data-table employee-card-list" data-view="employee-cards" data-api="/api/employees" data-edit-modal="#employeeModal" data-edit-title="Edit Employee" data-page-size="24" data-page-sizes="12,24,48,96">
+    
+  </div>
 </section>
+
+<div class="modal fade" id="employeeViewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title fs-5">Employee Details</h2></div>
+      <div class="modal-body" id="employeeViewBody"></div>
+      <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="employeeDocumentsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title fs-5">Employee Documents</h2></div>
+      <div class="modal-body">
+        <form id="employeeDocumentForm" class="employee-document-form">
+          <div>
+            <label class="form-label">Document Name</label>
+            <input class="form-control" name="document_name" placeholder="Joining form / ID proof / Increment letter" required>
+          </div>
+          <div>
+            <label class="form-label">File</label>
+            <input class="form-control" name="file" type="file" required>
+          </div>
+          <button class="btn btn-primary" type="submit">Upload</button>
+        </form>
+        <div id="employeeDocumentList" class="employee-document-list"></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="employeeModal" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content ajax-form" data-api="/api/employees" data-create-api="/api/employees"><div class="modal-header"><h2 class="modal-title fs-5">Employee</h2></div><div class="modal-body row g-3">
   <div class="col-12"><h3 class="form-section-title">Basic Information</h3></div>
@@ -76,6 +115,10 @@
   <div class="col-md-3"><label class="form-label">Shift</label><select class="form-select option-loader" name="shift_id" data-source="/api/shifts" data-kind="shift"><option value="">Select shift</option></select></div>
   <div class="col-md-3"><label class="form-label">Date of Joining</label><input class="form-control" name="joining_date" type="date"></div>
   <div class="col-md-3"><label class="form-label">Date of Birth</label><input class="form-control" name="date_of_birth" type="date"></div>
+  <div class="col-12"><h3 class="form-section-title">Banking Details</h3></div>
+  <div class="col-md-4"><label class="form-label">Bank Name</label><input class="form-control" name="bank_name" placeholder="Bank name"></div>
+  <div class="col-md-4"><label class="form-label">Account Number</label><input class="form-control" name="account_number" placeholder="Account number"></div>
+  <div class="col-md-4"><label class="form-label">IFSC Code</label><input class="form-control" name="ifsc_code" placeholder="IFSC code"></div>
   <div class="col-12"><h3 class="form-section-title">Dashboard Access</h3></div>
   <div class="col-md-3">
     <label class="form-label">Allow Login</label>
@@ -84,17 +127,30 @@
       <option value="true">Yes</option>
     </select>
   </div>
-  <div class="col-md-3">
-    <label class="form-label">Dashboard Role</label>
-    <select class="form-select" name="access_level">
-      <option value="employee">Employee Self</option>
-      <option value="tl">TL</option>
-      <option value="manager">Manager</option>
-      <option value="admin">Admin</option>
-    </select>
-  </div>
+    <div class="col-md-3">
+      <label class="form-label">Dashboard Role</label>
+      <select class="form-select" name="access_level">
+        <option value="employee">Employee Self</option>
+        <option value="tl">TL</option>
+        <option value="manager">Manager</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
   <div class="col-md-3"><label class="form-label">Login Password</label><input class="form-control" name="login_password" type="password" placeholder="Default: Welcome@123" autocomplete="new-password"></div>
   <div class="col-md-3 d-flex align-items-end"><div class="alert alert-info mb-0 py-2">User will login using Email.</div></div>
+  <div class="col-12">
+    <label class="form-label">Module Permissions</label>
+    <div class="permission-grid">
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="employees"> Employees</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="assets"> Assets</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="attendance"> Live Attendance</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="leaves"> Leave</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="reports"> Reports</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="branches"> Branches</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="departments"> Departments</label>
+      <label><input class="form-check-input" type="checkbox" name="module_access" value="shifts"> Shift Rules</label>
+    </div>
+  </div>
   <div class="col-12"><h3 class="form-section-title">Additional Details</h3></div>
   <div class="col-md-3"><label class="form-label">Father Name</label><input class="form-control" name="father_name" placeholder="Father name"></div>
   <div class="col-md-3"><label class="form-label">Mother Name</label><input class="form-control" name="mother_name" placeholder="Mother name"></div>

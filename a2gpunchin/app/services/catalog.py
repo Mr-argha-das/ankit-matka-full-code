@@ -3,6 +3,7 @@ from bson.errors import InvalidId
 from fastapi import HTTPException, status
 
 from app.models.branch import Branch
+from app.models.asset import Asset
 from app.models.company import Company
 from app.models.department import Department
 from app.models.employee import Employee
@@ -18,6 +19,7 @@ from app.services.base import BaseService
 
 
 COMPANY_ADMIN_PERMISSIONS = [
+    "assets:create", "assets:read", "assets:update", "assets:delete",
     "branches:create", "branches:read", "branches:update", "branches:delete",
     "departments:create", "departments:read", "departments:update", "departments:delete",
     "employees:create", "employees:read", "employees:update", "employees:delete",
@@ -97,9 +99,43 @@ class DepartmentService(BaseService):
         super().__init__(BaseRepository(Department))
 
 
+class AssetService(BaseService):
+    search_fields = ["asset_id", "asset_name", "asset_type", "brand_model", "serial_number", "sim_number", "condition", "note"]
+    reference_fields = {"employee_id"}
+    select_related_depth = 2
+
+    def __init__(self):
+        super().__init__(BaseRepository(Asset))
+
+    def _normalize_reference_ids(self, data: dict) -> dict:
+        for field in self.reference_fields:
+            if field not in data:
+                continue
+            value = data[field]
+            if value in (None, "", "-"):
+                data.pop(field)
+                continue
+            if isinstance(value, str):
+                try:
+                    data[field] = ObjectId(value)
+                except InvalidId as exc:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid {field.replace('_', ' ')} selected.") from exc
+        return data
+
+    def create(self, data: dict):
+        return super().create(self._normalize_reference_ids(data))
+
+    def update(self, object_id: str, data: dict):
+        return super().update(object_id, self._normalize_reference_ids(data))
+
+    def list(self, page: int = 1, page_size: int = 20, search: str | None = None, sort: str = "-created_at", **filters):
+        return super().list(page=page, page_size=page_size, search=search, sort=sort, **self._normalize_reference_ids(filters))
+
+
 class EmployeeService(BaseService):
     search_fields = ["employee_code", "first_name", "last_name", "email", "phone"]
     reference_fields = {"department_id", "branch_id", "shift_id", "reporting_manager"}
+    select_related_depth = 2
 
     def __init__(self):
         super().__init__(BaseRepository(Employee))
@@ -146,19 +182,31 @@ class EmployeeService(BaseService):
         data = self._normalize_reference_ids(data)
         portal_access = self._as_bool(data.pop("portal_access", False))
         access_level = data.pop("access_level", None)
+        module_access = data.pop("module_access", None)
         login_password = data.pop("login_password", None)
+        data["portal_access"] = portal_access
+        data["access_level"] = access_level or data.get("staff_role") or "employee"
+        if module_access is not None:
+            data["module_access"] = module_access
         if data.get("face_embedding"):
             data["face_enrolled"] = True
         employee = super().create(data)
         if portal_access:
-            sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password)
+            sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password, module_access)
         return employee
 
     def update(self, object_id: str, data: dict):
         data = self._normalize_reference_ids(data)
         portal_access = data.pop("portal_access", None)
         access_level = data.pop("access_level", None)
+        module_access = data.pop("module_access", None)
         login_password = data.pop("login_password", None)
+        if portal_access is not None:
+            data["portal_access"] = self._as_bool(portal_access)
+        if access_level is not None:
+            data["access_level"] = access_level
+        if module_access is not None:
+            data["module_access"] = module_access
         if data.get("face_embedding"):
             data["face_enrolled"] = True
         employee = super().update(object_id, data)
@@ -166,8 +214,12 @@ class EmployeeService(BaseService):
             employee.user_id.status = "active" if employee.status == "active" else "inactive"
             employee.user_id.is_active = employee.status == "active"
             employee.user_id.save()
+        if portal_access is not None and not self._as_bool(portal_access) and employee.user_id and not employee.user_id.is_super_admin:
+            employee.user_id.status = "inactive"
+            employee.user_id.is_active = False
+            employee.user_id.save()
         if self._as_bool(portal_access):
-            sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password)
+            sync_employee_user(employee, True, access_level or employee.staff_role or "employee", login_password, module_access)
         return employee
 
 

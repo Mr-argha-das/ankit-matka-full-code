@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.api import (
     auth,
+    assets,
     attendance,
     branches,
     companies,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
 
     app.include_router(web.router)
     app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+    app.include_router(assets.router, prefix="/api/assets", tags=["Assets"])
     app.include_router(companies.router, prefix="/api/companies", tags=["Companies"])
     app.include_router(branches.router, prefix="/api/branches", tags=["Branches"])
     app.include_router(departments.router, prefix="/api/departments", tags=["Departments"])

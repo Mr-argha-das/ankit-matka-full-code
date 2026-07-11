@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from app.core.dependencies import get_current_user, require_permissions
 from app.models.user import User
@@ -81,6 +81,7 @@ def _attendance_row(item) -> dict:
 
 @router.get("")
 def list_attendance(
+    background_tasks: BackgroundTasks,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
@@ -91,9 +92,10 @@ def list_attendance(
     status: str | None = None,
     user: User = Depends(require_permissions("attendance:read")),
 ):
-    service.sync_missing_face_attendance_records()
-    service.auto_punch_out_overdue()
-    service.recalculate_existing_attendance()
+    background_tasks.add_task(
+        service.run_request_maintenance,
+        service.queueable_maintenance_context(),
+    )
     filters = {}
     if start_date:
         filters["attendance_date__gte"] = start_date
