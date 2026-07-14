@@ -37,12 +37,16 @@ async def register_employee_image(
     employee_id: Annotated[str, Form(...)],
     name: Annotated[str, Form(...)],
     image: Annotated[UploadFile, File(...)],
+    branch_id: Annotated[str, Form(...)],
+    kiosk_pin: Annotated[str, Form(...)],
     department: Annotated[str | None, Form()] = None,
 ):
     image_bytes = await read_image(image)
     return get_attendance_service().register_employee(
         employee_id=employee_id,
         name=name,
+        branch_id=branch_id,
+        kiosk_pin=kiosk_pin,
         department=department,
         image_bytes=image_bytes,
         image_content_type=image.content_type or "image/jpeg",
@@ -50,9 +54,22 @@ async def register_employee_image(
 
 
 @router.post("/punch")
-async def punch_by_face(image: Annotated[UploadFile, File(...)]):
+async def punch_by_face(
+    image: Annotated[UploadFile, File(...)],
+    liveness_image: Annotated[UploadFile, File(...)],
+    branch_id: Annotated[str, Form(...)],
+    kiosk_pin: Annotated[str, Form(...)],
+    liveness_challenge: Annotated[str, Form(...)],
+):
     image_bytes = await read_image(image)
-    return get_attendance_service().recognize_and_punch(image_bytes)
+    liveness_image_bytes = await read_image(liveness_image)
+    return get_attendance_service().recognize_and_punch(
+        image_bytes,
+        branch_id=branch_id,
+        kiosk_pin=kiosk_pin,
+        liveness_image_bytes=liveness_image_bytes,
+        liveness_challenge=liveness_challenge,
+    )
 
 
 @router.get("/employees/search")

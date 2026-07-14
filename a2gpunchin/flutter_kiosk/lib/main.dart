@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
@@ -78,6 +79,7 @@ class _KioskShellState extends State<KioskShell> {
   KioskPage _page = KioskPage.settings;
   bool _busy = false;
   String _message = 'Connect kiosk from settings.';
+  String? _livenessPrompt;
 
   @override
   void initState() {
@@ -188,6 +190,16 @@ class _KioskShellState extends State<KioskShell> {
     return File(file.path).readAsBytes();
   }
 
+  ({String code, String prompt}) _nextLivenessChallenge() {
+    const challenges = [
+      (code: 'blink', prompt: 'Blink your eyes now'),
+      (code: 'turn_left', prompt: 'Turn your head left'),
+      (code: 'turn_right', prompt: 'Turn your head right'),
+      (code: 'look_up', prompt: 'Look up once'),
+    ];
+    return challenges[Random().nextInt(challenges.length)];
+  }
+
   Future<void> _scanAndPunch() async {
     if (_busy || _page != KioskPage.scanner) return;
     final client = _client;
@@ -198,15 +210,26 @@ class _KioskShellState extends State<KioskShell> {
     }
     setState(() {
       _busy = true;
+      _livenessPrompt = null;
       _message = 'Scanning face...';
     });
     try {
+      final challenge = _nextLivenessChallenge();
+      setState(() {
+        _livenessPrompt = challenge.prompt;
+        _message = challenge.prompt;
+      });
+      await _speak(challenge.prompt);
       final imageBytes = await _captureImageBytes();
+      await Future.delayed(const Duration(milliseconds: 1300));
+      final livenessImageBytes = await _captureImageBytes();
       final result = await client.facePunch(
         branchId: session.branchId,
         kioskPin: _pinController.text.trim(),
         action: 'auto',
         imageBytes: imageBytes,
+        livenessImageBytes: livenessImageBytes,
+        livenessChallenge: challenge.code,
       );
       if (result['success'] == false || result['recognized'] == false) {
         final message =
@@ -223,13 +246,23 @@ class _KioskShellState extends State<KioskShell> {
           : 'Punch in successful. Thank you $firstName.';
       _toast(message, success: true);
       await _speak(message);
-      _setMessage(message);
+      if (mounted) {
+        setState(() {
+          _livenessPrompt = null;
+          _message = message;
+        });
+      }
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (!message.toLowerCase().contains('no face')) {
         _toast(message, success: false);
       }
-      _setMessage(message);
+      if (mounted) {
+        setState(() {
+          _livenessPrompt = null;
+          _message = message;
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -564,6 +597,29 @@ class _ScannerPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (state._livenessPrompt != null) ...[
+                  const SizedBox(height: 18),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFF59E0B)),
+                      ),
+                      child: Text(
+                        state._livenessPrompt!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFF92400E),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 SizedBox(
                   height: 58,

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     whatsapp_token: str = ""
     auto_punch_out_after_minutes: int = 30
     face_punch_cooldown_seconds: int = 10
+    face_liveness_min_frame_delta: float = 3.5
 
 
 @lru_cache

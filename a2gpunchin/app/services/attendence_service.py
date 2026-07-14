@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+import cv2
+import numpy as np
 from fastapi import HTTPException
 from mongoengine import (
     BinaryField,
@@ -13,6 +15,7 @@ from mongoengine import (
     StringField,
 )
 
+from app.core.config import settings
 from app.models.attendance import Attendance
 from app.models.branch import Branch
 from app.models.employee import Employee
@@ -79,6 +82,59 @@ class AttendanceService:
         if employee and employee.department_id:
             return employee.department_id.department_name
         return fallback.strip() if fallback else None
+
+    def _kiosk_branch(self, branch_id: str, kiosk_pin: str) -> Branch:
+        branch = Branch.objects(id=branch_id, kiosk_pin=kiosk_pin, is_active=True).first()
+        if not branch:
+            raise HTTPException(status_code=401, detail="Invalid kiosk session")
+        return branch
+
+    def _ensure_employee_allowed_at_branch(self, employee: Employee | None, branch: Branch) -> Employee:
+        if not employee:
+            raise HTTPException(status_code=404, detail="Matched employee profile nahi mila.")
+        if not employee.is_active or employee.status != "active":
+            raise HTTPException(status_code=400, detail="Matched employee active nahi hai.")
+        if employee.tenant_id != branch.tenant_id:
+            raise HTTPException(status_code=403, detail="Employee is kiosk branch ke tenant me nahi hai.")
+        if branch.company_id and employee.company_id != branch.company_id:
+            raise HTTPException(status_code=403, detail="Employee is kiosk company me nahi hai.")
+        return employee
+
+    def _image_motion_score(self, first_image_bytes: bytes, second_image_bytes: bytes) -> float:
+        first = self.face_engine._decode_image(first_image_bytes)
+        second = self.face_engine._decode_image(second_image_bytes)
+        first_gray = cv2.cvtColor(first, cv2.COLOR_BGR2GRAY)
+        second_gray = cv2.cvtColor(second, cv2.COLOR_BGR2GRAY)
+        first_small = cv2.resize(first_gray, (96, 96), interpolation=cv2.INTER_AREA)
+        second_small = cv2.resize(second_gray, (96, 96), interpolation=cv2.INTER_AREA)
+        return float(np.mean(cv2.absdiff(first_small, second_small)))
+
+    def _verify_liveness(
+        self,
+        image_bytes: bytes,
+        liveness_image_bytes: bytes,
+        liveness_challenge: str,
+        expected_employee_id: str,
+    ) -> dict[str, Any]:
+        allowed_challenges = {"blink", "turn_left", "turn_right", "look_up"}
+        if liveness_challenge not in allowed_challenges:
+            raise HTTPException(status_code=400, detail="Invalid liveness challenge.")
+
+        motion_score = self._image_motion_score(image_bytes, liveness_image_bytes)
+        min_motion_score = max(0.0, getattr(settings, "face_liveness_min_frame_delta", 3.5))
+        if motion_score < min_motion_score:
+            raise HTTPException(
+                status_code=400,
+                detail="Live movement detect nahi hua. Photo/screen ke bajay real face se dobara try karo.",
+            )
+
+        liveness_match = self.face_engine.search_employee(liveness_image_bytes)
+        if not liveness_match["found"]:
+            raise HTTPException(status_code=400, detail="Liveness frame me face reliably match nahi hua.")
+        if liveness_match["employee_id"] != expected_employee_id:
+            raise HTTPException(status_code=400, detail="Liveness frame same employee ka nahi hai.")
+
+        return {"challenge": liveness_challenge, "motion_score": round(motion_score, 2)}
 
     def _sync_employee_enrollment(self, employee: Employee | None) -> None:
         if not employee:
@@ -191,12 +247,16 @@ class AttendanceService:
         self,
         employee_id: str,
         name: str,
+        branch_id: str,
+        kiosk_pin: str,
         image_bytes: bytes,
         image_content_type: str,
         department: str | None = None,
     ) -> dict[str, Any]:
+        branch = self._kiosk_branch(branch_id, kiosk_pin)
         employee_id = employee_id.strip()
         admin_employee = self._employee_for_face_id(employee_id)
+        admin_employee = self._ensure_employee_allowed_at_branch(admin_employee, branch)
         face_employee_id = admin_employee.employee_code if admin_employee else employee_id
         employee_name = self._employee_name(admin_employee, name)
         employee_department = self._employee_department(admin_employee, department)
@@ -270,7 +330,15 @@ class AttendanceService:
             )
         return results
 
-    def recognize_and_punch(self, image_bytes: bytes) -> dict[str, Any]:
+    def recognize_and_punch(
+        self,
+        image_bytes: bytes,
+        branch_id: str,
+        kiosk_pin: str,
+        liveness_image_bytes: bytes,
+        liveness_challenge: str,
+    ) -> dict[str, Any]:
+        branch = self._kiosk_branch(branch_id, kiosk_pin)
         match = self.face_engine.search_employee(image_bytes)
         if not match["found"]:
             return {
@@ -283,6 +351,13 @@ class AttendanceService:
         employee = EmployeeFace.objects(employee_id=match["employee_id"]).first()
         if employee is None:
             raise HTTPException(status_code=404, detail="Employee MongoDB me nahi mila.")
+        self._ensure_employee_allowed_at_branch(self._employee_for_face_id(employee.employee_id), branch)
+        liveness = self._verify_liveness(
+            image_bytes,
+            liveness_image_bytes,
+            liveness_challenge,
+            expected_employee_id=employee.employee_id,
+        )
 
         now = datetime.utcnow()
         self.admin_attendance_service.auto_punch_out_overdue(now)
@@ -318,6 +393,7 @@ class AttendanceService:
                 "department": employee.department,
                 "employee_image_url": f"/api/v1/attendance/employees/{employee.employee_id}/image",
                 "confidence": match["confidence"],
+                "liveness": liveness,
                 "punch_in": now.isoformat(),
                 "punch_out": None,
                 "duration_seconds": None,
@@ -344,6 +420,7 @@ class AttendanceService:
             "department": employee.department,
             "employee_image_url": f"/api/v1/attendance/employees/{employee.employee_id}/image",
             "confidence": match["confidence"],
+            "liveness": liveness,
             "punch_in": open_record.punch_in.isoformat(),
             "punch_out": now.isoformat(),
             "duration_seconds": duration_seconds,

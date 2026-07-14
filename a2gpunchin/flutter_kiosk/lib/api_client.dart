@@ -85,12 +85,24 @@ class KioskApiClient {
     required String kioskPin,
     required String action,
     required Uint8List imageBytes,
+    required Uint8List livenessImageBytes,
+    required String livenessChallenge,
   }) async {
     final request = http.MultipartRequest('POST', _uri('/api/v1/attendance/punch'))
+      ..fields['branch_id'] = branchId
+      ..fields['kiosk_pin'] = kioskPin
+      ..fields['action'] = action
+      ..fields['liveness_challenge'] = livenessChallenge
       ..files.add(http.MultipartFile.fromBytes(
         'image',
         imageBytes,
         filename: 'punch.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ))
+      ..files.add(http.MultipartFile.fromBytes(
+        'liveness_image',
+        livenessImageBytes,
+        filename: 'liveness.jpg',
         contentType: MediaType('image', 'jpeg'),
       ));
     final response = await http.Response.fromStream(await request.send());
@@ -109,6 +121,8 @@ class KioskApiClient {
     final request = http.MultipartRequest('POST', _uri('/api/v1/attendance/employees'))
       ..fields['employee_id'] = employeeCode
       ..fields['name'] = employeeCode
+      ..fields['branch_id'] = branchId
+      ..fields['kiosk_pin'] = kioskPin
       ..files.add(http.MultipartFile.fromBytes(
         'image',
         imageBytes,
