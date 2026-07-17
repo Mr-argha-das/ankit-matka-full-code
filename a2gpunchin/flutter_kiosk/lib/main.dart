@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
@@ -67,11 +69,13 @@ class KioskShell extends StatefulWidget {
 
 class _KioskShellState extends State<KioskShell> {
   final _baseUrlController =
-      TextEditingController(text: 'https://hrms.a2groups.org');
+      TextEditingController(text: 'http://192.168.1.32:8001');
   final _branchCodeController = TextEditingController(text: 'AHIT');
   final _pinController = TextEditingController(text: '1234');
   final _employeeCodeController = TextEditingController();
   final _tts = FlutterTts();
+  final _audioRecorder = AudioRecorder();
+  final List<Uint8List> _voiceSamples = [];
 
   CameraController? _camera;
   KioskApiClient? _client;
@@ -79,7 +83,7 @@ class _KioskShellState extends State<KioskShell> {
   KioskPage _page = KioskPage.settings;
   bool _busy = false;
   String _message = 'Connect kiosk from settings.';
-  String? _livenessPrompt;
+  String? _voicePrompt;
 
   @override
   void initState() {
@@ -91,8 +95,9 @@ class _KioskShellState extends State<KioskShell> {
 
   Future<void> _configureVoice() async {
     await _tts.setLanguage('en-IN');
-    await _tts.setSpeechRate(0.46);
+    await _tts.setSpeechRate(0.58);
     await _tts.setPitch(1.0);
+    await _tts.awaitSpeakCompletion(true);
   }
 
   Future<void> _restore() async {
@@ -119,7 +124,7 @@ class _KioskShellState extends State<KioskShell> {
       (camera) => camera.lensDirection == CameraLensDirection.front,
       orElse: () => widget.cameras.first,
     );
-    final controller = CameraController(frontCamera, ResolutionPreset.high,
+    final controller = CameraController(frontCamera, ResolutionPreset.medium,
         enableAudio: false);
     await controller.initialize();
     if (!mounted) return;
@@ -174,11 +179,25 @@ class _KioskShellState extends State<KioskShell> {
         await _speak('Kiosk ready');
       }
     } catch (error) {
-      _toast(error.toString(), success: false);
-      _setMessage(error.toString());
+      final message = _connectionErrorMessage(error);
+      _toast(message, success: false);
+      _setMessage(message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _connectionErrorMessage(Object error) {
+    final text = error.toString();
+    final normalized = text.toLowerCase();
+    if (normalized.contains('clientexception') ||
+        normalized.contains('connection closed') ||
+        normalized.contains('connection refused') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('network is unreachable')) {
+      return 'Cannot connect to backend. Check that FastAPI is running, this phone is on the same Wi-Fi, and Backend URL uses the correct IP/port, for example http://192.168.1.32:8001.';
+    }
+    return text;
   }
 
   Future<Uint8List> _captureImageBytes() async {
@@ -190,14 +209,44 @@ class _KioskShellState extends State<KioskShell> {
     return File(file.path).readAsBytes();
   }
 
-  ({String code, String prompt}) _nextLivenessChallenge() {
-    const challenges = [
-      (code: 'blink', prompt: 'Blink your eyes now'),
-      (code: 'turn_left', prompt: 'Turn your head left'),
-      (code: 'turn_right', prompt: 'Turn your head right'),
-      (code: 'look_up', prompt: 'Look up once'),
-    ];
-    return challenges[Random().nextInt(challenges.length)];
+  Future<Uint8List> _recordVoiceClip({
+    required String prompt,
+    Duration duration = const Duration(seconds: 3),
+  }) async {
+    if (!await _audioRecorder.hasPermission()) {
+      throw Exception(
+          'Microphone permission is required for voice attendance.');
+    }
+    await _tts.stop();
+    await _speak(prompt);
+    await Future.delayed(const Duration(milliseconds: 350));
+    final directory = await getTemporaryDirectory();
+    final path =
+        '${directory.path}/voice_${DateTime.now().microsecondsSinceEpoch}.m4a';
+    await _audioRecorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 64000,
+        sampleRate: 16000,
+        numChannels: 1,
+      ),
+      path: path,
+    );
+    if (mounted) {
+      setState(() {
+        _voicePrompt = prompt;
+        _message = prompt;
+      });
+    }
+    await Future.delayed(duration);
+    final recordedPath = await _audioRecorder.stop();
+    if (recordedPath == null) {
+      throw Exception('Voice recording failed.');
+    }
+    final file = File(recordedPath);
+    final bytes = await file.readAsBytes();
+    unawaited(file.delete().catchError((_) => file));
+    return bytes;
   }
 
   Future<void> _scanAndPunch() async {
@@ -210,37 +259,34 @@ class _KioskShellState extends State<KioskShell> {
     }
     setState(() {
       _busy = true;
-      _livenessPrompt = null;
       _message = 'Scanning face...';
     });
     try {
-      final challenge = _nextLivenessChallenge();
-      setState(() {
-        _livenessPrompt = challenge.prompt;
-        _message = challenge.prompt;
-      });
-      await _speak(challenge.prompt);
       final imageBytes = await _captureImageBytes();
-      await Future.delayed(const Duration(milliseconds: 1300));
-      final livenessImageBytes = await _captureImageBytes();
-      final result = await client.facePunch(
+      setState(() => _message = 'Face matched. Preparing voice PIN...');
+      final challengeResult = await client.faceVoiceChallenge(
         branchId: session.branchId,
         kioskPin: _pinController.text.trim(),
         action: 'auto',
         imageBytes: imageBytes,
-        livenessImageBytes: livenessImageBytes,
-        livenessChallenge: challenge.code,
       );
-      if (result['success'] == false || result['recognized'] == false) {
-        final message =
-            result['message']?.toString() ?? 'Face not recognized.';
-        _toast(message, success: false);
-        _setMessage(message);
-        return;
-      }
+      final digits = challengeResult['digits']?.toString() ?? '';
+      final instruction = digits.isEmpty
+          ? 'Say the digits shown on screen.'
+          : 'Say these digits. $digits';
+      final audioBytes = await _recordVoiceClip(
+        prompt: instruction,
+        duration: const Duration(seconds: 3),
+      );
+      final result = await client.verifyFaceVoicePunch(
+        branchId: session.branchId,
+        kioskPin: _pinController.text.trim(),
+        challengeId: challengeResult['challenge_id'].toString(),
+        audioBytes: audioBytes,
+      );
       final name = result['employee_name']?.toString() ?? 'Employee';
       final firstName = name.split(' ').first;
-      final didPunchOut = result['action']?.toString().toUpperCase() == 'PUNCH_OUT';
+      final didPunchOut = result['action']?.toString() == 'punch_out';
       final message = didPunchOut
           ? 'Punch out successful. Thank you $firstName.'
           : 'Punch in successful. Thank you $firstName.';
@@ -248,7 +294,7 @@ class _KioskShellState extends State<KioskShell> {
       await _speak(message);
       if (mounted) {
         setState(() {
-          _livenessPrompt = null;
+          _voicePrompt = null;
           _message = message;
         });
       }
@@ -259,7 +305,7 @@ class _KioskShellState extends State<KioskShell> {
       }
       if (mounted) {
         setState(() {
-          _livenessPrompt = null;
+          _voicePrompt = null;
           _message = message;
         });
       }
@@ -268,7 +314,75 @@ class _KioskShellState extends State<KioskShell> {
     }
   }
 
-  Future<void> _enrollFace() async {
+  Future<void> _captureVoiceSample() async {
+    final employeeCode = _employeeCodeController.text.trim();
+    if (employeeCode.isEmpty) {
+      _toast('Enter employee code first.', success: false);
+      return;
+    }
+    if (_voiceSamples.length >= 5) {
+      _toast('Five voice samples are already ready.', success: true);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = 'Preparing voice sample ${_voiceSamples.length + 1} of 5...';
+    });
+    try {
+      final next = _voiceSamples.length + 1;
+      final sample = await _recordVoiceClip(
+        prompt: 'Voice sample $next. Say the digits 1 2 3 4 5 6 clearly.',
+      );
+      setState(() {
+        _voiceSamples.add(sample);
+        _voicePrompt = null;
+        _message = 'Voice sample ${_voiceSamples.length} of 5 saved.';
+      });
+      _toast('Voice sample ${_voiceSamples.length}/5 saved', success: true);
+    } catch (error) {
+      final message = error.toString().replaceFirst('Exception: ', '');
+      _toast(message, success: false);
+      _setMessage(message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<List<Uint8List>> _recordEnrollmentSamples() async {
+    final samples = List<Uint8List>.from(_voiceSamples);
+    while (samples.length < 5) {
+      final next = samples.length + 1;
+      if (mounted) {
+        setState(() {
+          _message = 'Recording voice sample $next of 5...';
+        });
+      }
+      final sample = await _recordVoiceClip(
+        prompt: 'Voice sample $next. Say the digits 1 2 3 4 5 6 clearly.',
+      );
+      samples.add(sample);
+      if (mounted) {
+        setState(() {
+          _voiceSamples
+            ..clear()
+            ..addAll(samples);
+          _voicePrompt = null;
+          _message = 'Voice sample $next of 5 saved.';
+        });
+      }
+    }
+    return samples;
+  }
+
+  void _clearVoiceSamples() {
+    setState(() {
+      _voiceSamples.clear();
+      _voicePrompt = null;
+      _message = 'Voice samples cleared.';
+    });
+  }
+
+  Future<void> _enrollVoice() async {
     final client = _client;
     final session = _session;
     final employeeCode = _employeeCodeController.text.trim();
@@ -282,24 +396,84 @@ class _KioskShellState extends State<KioskShell> {
     }
     setState(() {
       _busy = true;
-      _message = 'Capturing enrollment face...';
+      _message = _voiceSamples.length < 5
+          ? 'Recording voice enrollment...'
+          : 'Uploading voice enrollment...';
+    });
+    try {
+      final samples = await _recordEnrollmentSamples();
+      setState(() => _message = 'Uploading voice enrollment...');
+      final result = await client.enrollVoice(
+        branchId: session.branchId,
+        kioskPin: _pinController.text.trim(),
+        employeeCode: employeeCode,
+        samples: samples,
+      );
+      final code = result['employee_code']?.toString() ?? employeeCode;
+      setState(() {
+        _voiceSamples.clear();
+        _voicePrompt = null;
+        _message = 'Voice enrolled for $code.';
+      });
+      _toast('Voice enrolled for $code', success: true);
+      await _speak('Voice enrolled');
+    } catch (error) {
+      final message = error.toString().replaceFirst('Exception: ', '');
+      _toast(message, success: false);
+      _setMessage(message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _enrollFaceAndVoice() async {
+    final client = _client;
+    final session = _session;
+    final employeeCode = _employeeCodeController.text.trim();
+    if (employeeCode.isEmpty) {
+      _toast('Enter employee code.', success: false);
+      return;
+    }
+    if (client == null || session == null) {
+      _toast('Start kiosk from settings first.', success: false);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = 'Capturing face first...';
     });
     try {
       final imageBytes = await _captureImageBytes();
-      final result = await client.enrollFace(
+      final faceResult = await client.enrollFace(
         branchId: session.branchId,
         kioskPin: _pinController.text.trim(),
         employeeCode: employeeCode,
         imageBytes: imageBytes,
       );
-      final name = result['employee_name']?.toString() ?? result['name']?.toString() ?? employeeCode;
-      _employeeCodeController.clear();
-      _toast('Face enrolled for $name', success: true);
-      await _speak('Face enrolled for ${name.split(' ').first}');
-      _setMessage('Face enrolled for $name.');
+      setState(() => _message = 'Face enrolled. Recording voice next...');
+      final samples = await _recordEnrollmentSamples();
+      setState(() => _message = 'Uploading voice enrollment...');
+      final voiceResult = await client.enrollVoice(
+        branchId: session.branchId,
+        kioskPin: _pinController.text.trim(),
+        employeeCode: employeeCode,
+        samples: samples,
+      );
+      final name = faceResult['employee_name']?.toString() ??
+          faceResult['name']?.toString() ??
+          voiceResult['employee_code']?.toString() ??
+          employeeCode;
+      setState(() {
+        _voiceSamples.clear();
+        _voicePrompt = null;
+        _message = 'Face and voice enrolled for $name.';
+      });
+      _toast('Face and voice enrolled for $name', success: true);
+      await _speak('Face and voice enrolled');
     } catch (error) {
-      _toast(error.toString(), success: false);
-      _setMessage(error.toString());
+      final message = error.toString().replaceFirst('Exception: ', '');
+      _toast(message, success: false);
+      _setMessage(message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -325,6 +499,7 @@ class _KioskShellState extends State<KioskShell> {
   @override
   void dispose() {
     _camera?.dispose();
+    _audioRecorder.dispose();
     _tts.stop();
     _baseUrlController.dispose();
     _branchCodeController.dispose();
@@ -400,7 +575,7 @@ class _Sidebar extends StatelessWidget {
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.w900)),
-                    Text('Face punch console',
+                    Text('Face + voice console',
                         style:
                             TextStyle(color: Color(0xFFAAB2D5), fontSize: 12)),
                   ],
@@ -416,7 +591,7 @@ class _Sidebar extends StatelessWidget {
               onTap: () => state._openPage(KioskPage.scanner)),
           _NavItem(
               icon: Icons.person_add_alt_1,
-              label: 'Enroll Face',
+              label: 'Enroll Face + Voice',
               selected: state._page == KioskPage.enroll,
               onTap: () => state._openPage(KioskPage.enroll)),
           _NavItem(
@@ -597,22 +772,22 @@ class _ScannerPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (state._livenessPrompt != null) ...[
-                  const SizedBox(height: 18),
+                if (state._voicePrompt != null) ...[
+                  const SizedBox(height: 14),
                   Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 18, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
+                        color: const Color(0xFFECFDF5),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFFF59E0B)),
+                        border: Border.all(color: const Color(0xFF10B981)),
                       ),
                       child: Text(
-                        state._livenessPrompt!,
+                        state._voicePrompt!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: Color(0xFF92400E),
+                          color: Color(0xFF065F46),
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                         ),
@@ -628,8 +803,8 @@ class _ScannerPage extends StatelessWidget {
                     icon: const Icon(Icons.play_arrow_rounded),
                     label: const Text(
                       'Start Punch',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w900),
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ),
@@ -739,9 +914,9 @@ class _EnrollPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final camera = state._camera;
     return _PageScaffold(
-      title: 'Enroll Face',
+      title: 'Enroll Face + Voice',
       subtitle:
-          'Register employee face once. After enrollment the kiosk can auto punch in and out.',
+          'Tap once to enroll face first, then record voice. Punches require face match and spoken PIN digits.',
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isCompact = constraints.maxWidth < 720;
@@ -793,7 +968,7 @@ class _EnrollFormCard extends StatelessWidget {
           const Text('Employee Enrollment',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          Text('Enter employee code from admin panel, then capture face.',
+          Text('Enter employee code, then start face and voice enrollment.',
               style: TextStyle(color: Colors.grey.shade700, height: 1.35)),
           const SizedBox(height: 22),
           TextField(
@@ -804,15 +979,62 @@ class _EnrollFormCard extends StatelessWidget {
                 prefixIcon: Icon(Icons.badge_outlined)),
           ),
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: state._busy ? null : state._captureVoiceSample,
+                    icon: const Icon(Icons.mic),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child:
+                          Text('Voice Sample ${state._voiceSamples.length}/5'),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton.filledTonal(
+                onPressed: state._busy || state._voiceSamples.isEmpty
+                    ? null
+                    : state._clearVoiceSamples,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Clear voice samples',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             height: 52,
             child: FilledButton.icon(
-              onPressed: state._busy ? null : state._enrollFace,
-              icon: const Icon(Icons.face_retouching_natural),
+              onPressed: state._busy ? null : state._enrollFaceAndVoice,
+              icon: const Icon(Icons.verified_user),
               label: const FittedBox(
-                  fit: BoxFit.scaleDown, child: Text('Capture & Enroll Face')),
+                  fit: BoxFit.scaleDown,
+                  child: Text('Start Face + Voice Enrollment')),
             ),
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: state._busy ? null : state._enrollVoice,
+              icon: const Icon(Icons.record_voice_over),
+              label: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Voice Only (Face Exists)')),
+            ),
+          ),
+          if (state._voicePrompt != null) ...[
+            const SizedBox(height: 12),
+            Text(state._voicePrompt!,
+                style: const TextStyle(
+                    color: Color(0xFF065F46),
+                    fontWeight: FontWeight.w900,
+                    height: 1.35)),
+          ],
           const SizedBox(height: 16),
           Text(state._message,
               style:
@@ -833,7 +1055,7 @@ class _SettingsPage extends StatelessWidget {
     return _PageScaffold(
       title: 'Kiosk Settings',
       subtitle:
-          'Start this TL phone from any kiosk branch. After that, any enrolled employee in the company can punch here.',
+          'Start this TL phone from its kiosk branch. Employees assigned to this branch can punch after face and voice enrollment.',
       child: SingleChildScrollView(
         child: Center(
           child: ConstrainedBox(

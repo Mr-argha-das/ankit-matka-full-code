@@ -34,7 +34,15 @@ class Settings(BaseSettings):
     whatsapp_token: str = ""
     auto_punch_out_after_minutes: int = 30
     face_punch_cooldown_seconds: int = 10
+    face_index_dir: str = "./data/face_index"
+    similarity_threshold: float = 0.45
+    gpu_id: int = -1
+    face_det_size: int = 320
     face_liveness_min_frame_delta: float = 3.5
+    voice_data_dir: str = "./data/voice"
+    voice_speaker_threshold: float = 0.35
+    voice_device: str = "cpu"
+    default_timezone: str = "Asia/Kolkata"
 
 
 @lru_cache

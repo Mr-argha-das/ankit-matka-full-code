@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera is required to scan employee faces for attendance punch in and punch out.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone is required to verify employee voice for attendance punch in and punch out.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

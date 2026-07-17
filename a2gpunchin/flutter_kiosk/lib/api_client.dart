@@ -77,34 +77,51 @@ class KioskApiClient {
     if (response.statusCode != 200) {
       throw Exception(_detail(response));
     }
-    return KioskSession.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return KioskSession.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> facePunch({
+  Future<Map<String, dynamic>> faceVoiceChallenge({
     required String branchId,
     required String kioskPin,
     required String action,
     required Uint8List imageBytes,
-    required Uint8List livenessImageBytes,
-    required String livenessChallenge,
   }) async {
-    final request = http.MultipartRequest('POST', _uri('/api/v1/attendance/punch'))
-      ..fields['branch_id'] = branchId
-      ..fields['kiosk_pin'] = kioskPin
-      ..fields['action'] = action
-      ..fields['liveness_challenge'] = livenessChallenge
-      ..files.add(http.MultipartFile.fromBytes(
-        'image',
-        imageBytes,
-        filename: 'punch.jpg',
-        contentType: MediaType('image', 'jpeg'),
-      ))
-      ..files.add(http.MultipartFile.fromBytes(
-        'liveness_image',
-        livenessImageBytes,
-        filename: 'liveness.jpg',
-        contentType: MediaType('image', 'jpeg'),
-      ));
+    final request =
+        http.MultipartRequest('POST', _uri('/api/v1/face-voice/challenge'))
+          ..fields['branch_id'] = branchId
+          ..fields['kiosk_pin'] = kioskPin
+          ..fields['action'] = action
+          ..files.add(http.MultipartFile.fromBytes(
+            'image',
+            imageBytes,
+            filename: 'challenge.jpg',
+            contentType: MediaType('image', 'jpeg'),
+          ));
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw Exception(_detail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> verifyFaceVoicePunch({
+    required String branchId,
+    required String kioskPin,
+    required String challengeId,
+    required Uint8List audioBytes,
+  }) async {
+    final request =
+        http.MultipartRequest('POST', _uri('/api/v1/face-voice/verify'))
+          ..fields['branch_id'] = branchId
+          ..fields['kiosk_pin'] = kioskPin
+          ..fields['challenge_id'] = challengeId
+          ..files.add(http.MultipartFile.fromBytes(
+            'audio',
+            audioBytes,
+            filename: 'digits.m4a',
+            contentType: MediaType('audio', 'mp4'),
+          ));
     final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200) {
       throw Exception(_detail(response));
@@ -118,17 +135,44 @@ class KioskApiClient {
     required String employeeCode,
     required Uint8List imageBytes,
   }) async {
-    final request = http.MultipartRequest('POST', _uri('/api/v1/attendance/employees'))
-      ..fields['employee_id'] = employeeCode
-      ..fields['name'] = employeeCode
-      ..fields['branch_id'] = branchId
-      ..fields['kiosk_pin'] = kioskPin
-      ..files.add(http.MultipartFile.fromBytes(
-        'image',
-        imageBytes,
-        filename: '$employeeCode.jpg',
-        contentType: MediaType('image', 'jpeg'),
+    final request =
+        http.MultipartRequest('POST', _uri('/api/v1/attendance/employees'))
+          ..fields['employee_id'] = employeeCode
+          ..fields['name'] = employeeCode
+          ..fields['branch_id'] = branchId
+          ..fields['kiosk_pin'] = kioskPin
+          ..files.add(http.MultipartFile.fromBytes(
+            'image',
+            imageBytes,
+            filename: '$employeeCode.jpg',
+            contentType: MediaType('image', 'jpeg'),
+          ));
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw Exception(_detail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> enrollVoice({
+    required String branchId,
+    required String kioskPin,
+    required String employeeCode,
+    required List<Uint8List> samples,
+  }) async {
+    final request =
+        http.MultipartRequest('POST', _uri('/api/v1/face-voice/enroll'))
+          ..fields['employee_code'] = employeeCode
+          ..fields['branch_id'] = branchId
+          ..fields['kiosk_pin'] = kioskPin;
+    for (var index = 0; index < samples.length; index += 1) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'samples',
+        samples[index],
+        filename: 'voice_sample_${index + 1}.m4a',
+        contentType: MediaType('audio', 'mp4'),
       ));
+    }
     final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200) {
       throw Exception(_detail(response));
@@ -155,7 +199,8 @@ class KioskApiClient {
     }
     final body = jsonDecode(response.body) as List<dynamic>;
     return body
-        .map((item) => KioskEmployeeOption.fromJson(item as Map<String, dynamic>))
+        .map((item) =>
+            KioskEmployeeOption.fromJson(item as Map<String, dynamic>))
         .where((item) => item.employeeCode.isNotEmpty)
         .toList();
   }
@@ -163,7 +208,9 @@ class KioskApiClient {
   String _detail(http.Response response) {
     final contentType = response.headers['content-type'] ?? '';
     final bodyText = response.body.trim();
-    if (contentType.contains('text/html') || bodyText.startsWith('<!doctype html') || bodyText.startsWith('<html')) {
+    if (contentType.contains('text/html') ||
+        bodyText.startsWith('<!doctype html') ||
+        bodyText.startsWith('<html')) {
       return 'Backend returned a web page instead of API JSON. Check Backend URL, port, and make sure the FastAPI server is running.';
     }
     try {
@@ -173,7 +220,9 @@ class KioskApiClient {
       if (bodyText.length > 180) {
         return '${bodyText.substring(0, 180)}...';
       }
-      return bodyText.isEmpty ? 'Request failed with status ${response.statusCode}' : bodyText;
+      return bodyText.isEmpty
+          ? 'Request failed with status ${response.statusCode}'
+          : bodyText;
     }
   }
 }

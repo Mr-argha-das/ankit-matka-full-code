@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-import cv2
 import numpy as np
 from fastapi import HTTPException
 from mongoengine import (
@@ -101,6 +100,8 @@ class AttendanceService:
         return employee
 
     def _image_motion_score(self, first_image_bytes: bytes, second_image_bytes: bytes) -> float:
+        import cv2
+
         first = self.face_engine._decode_image(first_image_bytes)
         second = self.face_engine._decode_image(second_image_bytes)
         first_gray = cv2.cvtColor(first, cv2.COLOR_BGR2GRAY)
@@ -261,7 +262,10 @@ class AttendanceService:
         employee_name = self._employee_name(admin_employee, name)
         employee_department = self._employee_department(admin_employee, department)
 
-        face_result = self.face_engine.add_employee_face(face_employee_id, image_bytes)
+        try:
+            face_result = self.face_engine.add_employee_face(face_employee_id, image_bytes)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         if not face_result["success"]:
             raise HTTPException(status_code=400, detail=face_result["message"])
 
@@ -339,7 +343,10 @@ class AttendanceService:
         liveness_challenge: str,
     ) -> dict[str, Any]:
         branch = self._kiosk_branch(branch_id, kiosk_pin)
-        match = self.face_engine.search_employee(image_bytes)
+        try:
+            match = self.face_engine.search_employee(image_bytes)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         if not match["found"]:
             return {
                 "success": False,
@@ -352,12 +359,15 @@ class AttendanceService:
         if employee is None:
             raise HTTPException(status_code=404, detail="Employee MongoDB me nahi mila.")
         self._ensure_employee_allowed_at_branch(self._employee_for_face_id(employee.employee_id), branch)
-        liveness = self._verify_liveness(
-            image_bytes,
-            liveness_image_bytes,
-            liveness_challenge,
-            expected_employee_id=employee.employee_id,
-        )
+        try:
+            liveness = self._verify_liveness(
+                image_bytes,
+                liveness_image_bytes,
+                liveness_challenge,
+                expected_employee_id=employee.employee_id,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
         now = datetime.utcnow()
         self.admin_attendance_service.auto_punch_out_overdue(now)
