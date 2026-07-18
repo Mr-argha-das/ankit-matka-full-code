@@ -102,7 +102,7 @@ class FaceVoiceService:
         if not match.get("found"):
             raise HTTPException(status_code=404, detail=match.get("message", "Face match nahi hua"))
 
-        employee_face = EmployeeFace.objects(employee_id=match["employee_id"]).first()
+        employee_face = EmployeeFace.objects(employee_id=match["employee_id"]).only("employee_id").first()
         if employee_face is None:
             raise HTTPException(status_code=404, detail="Matched employee face record nahi mila")
         employee = self.face_service._employee_for_face_id(employee_face.employee_id)
@@ -193,8 +193,8 @@ class FaceVoiceService:
     def _commit_punch(self, employee: Employee, action: str, face_confidence: float) -> Attendance:
         admin_service = self.face_service.admin_attendance_service
         now = datetime.utcnow()
-        admin_service.auto_punch_out_overdue(now)
-        employee_face = EmployeeFace.objects(employee_id=employee.employee_code).first()
+        admin_service.auto_punch_out_overdue_for_employee(employee, now)
+        employee_face = EmployeeFace.objects(employee_id=employee.employee_code).only("employee_id", "name", "department").first()
         if employee_face is None:
             raise HTTPException(status_code=404, detail="Employee face profile nahi mila")
         open_record = AttendanceRecord.objects(

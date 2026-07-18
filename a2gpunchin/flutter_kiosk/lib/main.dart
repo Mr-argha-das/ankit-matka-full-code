@@ -211,7 +211,7 @@ class _KioskShellState extends State<KioskShell> {
 
   Future<Uint8List> _recordVoiceClip({
     required String prompt,
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(milliseconds: 2500),
   }) async {
     if (!await _audioRecorder.hasPermission()) {
       throw Exception(
@@ -219,7 +219,7 @@ class _KioskShellState extends State<KioskShell> {
     }
     await _tts.stop();
     await _speak(prompt);
-    await Future.delayed(const Duration(milliseconds: 350));
+    await Future.delayed(const Duration(milliseconds: 120));
     final directory = await getTemporaryDirectory();
     final path =
         '${directory.path}/voice_${DateTime.now().microsecondsSinceEpoch}.m4a';
@@ -271,12 +271,10 @@ class _KioskShellState extends State<KioskShell> {
         imageBytes: imageBytes,
       );
       final digits = challengeResult['digits']?.toString() ?? '';
-      final instruction = digits.isEmpty
-          ? 'Say the digits shown on screen.'
-          : 'Say these digits. $digits';
+      final instruction = digits.isEmpty ? 'Say the digits.' : 'Say $digits';
       final audioBytes = await _recordVoiceClip(
         prompt: instruction,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(milliseconds: 2500),
       );
       final result = await client.verifyFaceVoicePunch(
         branchId: session.branchId,
@@ -291,7 +289,7 @@ class _KioskShellState extends State<KioskShell> {
           ? 'Punch out successful. Thank you $firstName.'
           : 'Punch in successful. Thank you $firstName.';
       _toast(message, success: true);
-      await _speak(message);
+      unawaited(_speak(message));
       if (mounted) {
         setState(() {
           _voicePrompt = null;

@@ -123,7 +123,7 @@ class FastVoiceEngine:
         self._kaldi_recognizer: Any | None = None
         self._ffmpeg_path: str | None = None
         self._inference_lock = threading.RLock()
-        self._recognizer_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="voice-asr")
+        self._recognizer_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="voice-verify")
         self.is_ready = False
         self.last_error: str | None = None
 
@@ -269,6 +269,7 @@ class FastVoiceEngine:
             raise RuntimeError(self.last_error or "FastVoiceEngine initialize nahi hua")
         waveform, quality = self.decode_audio(audio_bytes)
         samples = waveform.squeeze(0).numpy()
+        candidate_future = self._recognizer_pool.submit(self.embedding, waveform)
         english_future = self._recognizer_pool.submit(
             self._recognize,
             self._kaldi_recognizer,
@@ -293,7 +294,7 @@ class FastVoiceEngine:
                 "reason": "spoken_digits_do_not_match",
                 "quality": quality,
             }
-        candidate = self.embedding(waveform)
+        candidate = candidate_future.result()
         reference = self._normalise(np.asarray(stored_embedding, dtype="float32"))
         speaker_score = float(np.dot(reference, candidate))
         verified = speaker_score >= self.speaker_threshold

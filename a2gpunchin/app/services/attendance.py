@@ -250,6 +250,35 @@ class AttendanceService(BaseService):
             updated += 1
         return updated
 
+    def auto_punch_out_overdue_for_employee(self, employee: Employee, now: datetime | None = None) -> int:
+        now_utc = self._aware(now or self.utc_now()).astimezone(timezone.utc)
+        grace_minutes = max(0, getattr(settings, "auto_punch_out_after_minutes", 30))
+        open_records = Attendance.objects(
+            employee_id=employee,
+            attendance_status="approved",
+            check_in_time__ne=None,
+            check_out_time=None,
+            shift_id__ne=None,
+            is_active=True,
+        )
+        updated = 0
+        for attendance in open_records:
+            auto_out_at = self._auto_punch_out_time(attendance)
+            if not auto_out_at:
+                continue
+            due_at = auto_out_at + timedelta(minutes=grace_minutes)
+            if now_utc < due_at:
+                continue
+            attendance.check_out_time = auto_out_at
+            attendance.check_out_status = "auto_punch_out"
+            if attendance.check_in_time:
+                start = self._aware(attendance.check_in_time)
+                attendance.total_work_minutes = max(0, int((auto_out_at - start).total_seconds() // 60))
+            attendance.save()
+            self._sync_face_record_auto_punch_out(attendance, auto_out_at)
+            updated += 1
+        return updated
+
     def sync_missing_face_attendance_records(self, limit: int = 500) -> int:
         try:
             from app.services.attendence_service import AttendanceRecord
