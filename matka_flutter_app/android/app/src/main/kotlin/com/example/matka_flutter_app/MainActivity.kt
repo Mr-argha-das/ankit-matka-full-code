@@ -10,6 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channelName = "matka/upi_intent"
+    private val externalUrlChannelName = "matka/external_url"
     private val upiRequestCode = 7301
     private var pendingResult: MethodChannel.Result? = null
 
@@ -37,6 +38,73 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            externalUrlChannelName
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openExternalUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (url.isNullOrBlank()) {
+                        result.error("INVALID_URL", "External URL is missing", null)
+                        return@setMethodCallHandler
+                    }
+                    openExternalUrl(url, result)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun openExternalUrl(url: String, result: MethodChannel.Result) {
+        try {
+            val intent = if (url.startsWith("intent://")) {
+                Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+            } else {
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            }
+
+            if (
+                url.startsWith("whatsapp://") ||
+                url.contains("api.whatsapp.com") ||
+                url.contains("wa.me/")
+            ) {
+                intent.setPackage("com.whatsapp")
+            }
+
+            startActivity(intent)
+            result.success(null)
+        } catch (error: ActivityNotFoundException) {
+            try {
+                val fallbackUrl = if (url.startsWith("intent://")) {
+                    Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+                        .getStringExtra("browser_fallback_url")
+                } else {
+                    url
+                }
+
+                if (fallbackUrl.isNullOrBlank()) {
+                    result.error("APP_NOT_FOUND", "Required app is not installed", null)
+                    return
+                }
+
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl)))
+                result.success(null)
+            } catch (fallbackError: Exception) {
+                result.error(
+                    "OPEN_URL_ERROR",
+                    fallbackError.message ?: "Unable to open external app",
+                    null
+                )
+            }
+        } catch (error: Exception) {
+            result.error(
+                "OPEN_URL_ERROR",
+                error.message ?: "Unable to open external app",
+                null
+            )
         }
     }
 

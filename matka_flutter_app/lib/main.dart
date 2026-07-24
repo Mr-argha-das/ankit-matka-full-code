@@ -43,6 +43,7 @@ class MatkaWebView extends StatefulWidget {
 
 class _MatkaWebViewState extends State<MatkaWebView> {
   static const _upiChannel = MethodChannel('matka/upi_intent');
+  static const _externalUrlChannel = MethodChannel('matka/external_url');
 
   late final WebViewController _controller;
   var _progress = 0;
@@ -68,16 +69,47 @@ class _MatkaWebViewState extends State<MatkaWebView> {
               setState(() => _hasError = true);
             }
           },
-          onNavigationRequest: (request) {
+          onNavigationRequest: (request) async {
+            final uri = Uri.tryParse(request.url);
+
             if (request.url.startsWith('upi://')) {
               _openUpiLink({'upi_link': request.url});
               return NavigationDecision.prevent;
             }
+
+            if (_shouldOpenExternally(uri)) {
+              await _openExternalUrl(request.url);
+              return NavigationDecision.prevent;
+            }
+
             return NavigationDecision.navigate;
           },
         ),
       )
       ..loadRequest(Uri.parse(webAppUrl));
+  }
+
+  bool _shouldOpenExternally(Uri? uri) {
+    if (uri == null) return false;
+
+    const externalSchemes = {'intent', 'whatsapp', 'tel', 'sms', 'mailto'};
+    const whatsAppHosts = {'api.whatsapp.com', 'wa.me', 'www.wa.me'};
+
+    return externalSchemes.contains(uri.scheme.toLowerCase()) ||
+        whatsAppHosts.contains(uri.host.toLowerCase());
+  }
+
+  Future<void> _openExternalUrl(String url) async {
+    try {
+      await _externalUrlChannel.invokeMethod<void>('openExternalUrl', {
+        'url': url,
+      });
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message ?? 'App open nahi ho paayi.')),
+      );
+    }
   }
 
   Future<void> _startUpiPayment(JavaScriptMessage message) async {
@@ -193,10 +225,7 @@ class _ErrorView extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),
