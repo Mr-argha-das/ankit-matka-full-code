@@ -31,11 +31,42 @@ def get_digit(num_str: str):
     total = sum(int(d) for d in num_str)
     return str(total % 10)
 
-def build_result(open_result, close_result):
-    """Build final result '248-4-112' """
-    if open_result == "-" or close_result == "-":
-        return "-"
-    return f"{open_result}-{get_digit(open_result)}-{close_result}"
+def build_result(result):
+    """Build a public result string from the latest Result document."""
+    if not result:
+        return "***-**-***"
+
+    open_panna = result.open_panna or "***"
+    close_panna = result.close_panna or "***"
+    open_digit = result.open_digit or get_digit(result.open_panna) or "*"
+    close_digit = result.close_digit or get_digit(result.close_panna) or "*"
+    open_digit = "*" if open_digit == "-" else open_digit
+    close_digit = "*" if close_digit == "-" else close_digit
+    return f"{open_panna}-{open_digit}{close_digit}-{close_panna}"
+
+
+def serialize_public_market(market):
+    latest_result = (
+        Result.objects(market_id=str(market.id))
+        .order_by("-date")
+        .first()
+    )
+    running = bool(market.status) and is_market_running(
+        market.open_time,
+        market.close_time,
+    )
+
+    return {
+        "id": str(market.id),
+        "name": market.name,
+        "open_time": market.open_time,
+        "close_time": market.close_time,
+        "open_result": latest_result.open_panna if latest_result else None,
+        "close_result": latest_result.close_panna if latest_result else None,
+        "final_result": build_result(latest_result),
+        "status": "Market Running" if running else "Market Closed",
+        "is_active": market.is_active,
+    }
 
 router = APIRouter(prefix="/market")
 
@@ -44,7 +75,7 @@ router = APIRouter(prefix="/market")
 # CREATE MARKET
 # ---------------------------
 @router.post("/create")
-def create_market(name: str, open_time: str, close_time: str , open_result : str = "-", close_result : str = "-"):
+def create_market(name: str, open_time: str, close_time: str):
     if Market.objects(name=name).first():
         raise HTTPException(400, "Market already exists")
 
@@ -52,8 +83,7 @@ def create_market(name: str, open_time: str, close_time: str , open_result : str
         name=name,
         open_time=open_time,
         close_time=close_time,
-        open_result=open_result,
-        close_result=close_result
+        marketType="Market",
     )
     market.save()
     return {"msg": "Market created successfully", "market": json.loads(market.to_json())}
@@ -105,21 +135,7 @@ def get_market(market_id: str):
     if not m:
         raise HTTPException(404, "Market not found")
 
-    status = "Market Running" if is_market_running(m.open_time, m.close_time) else "Market Closed"
-    final_result = build_result(m.open_result, m.close_result)
-
-    data = {
-        "id": str(m.id),
-        "name": m.name,
-        "open_time": m.open_time,
-        "close_time": m.close_time,
-        "open_result": m.open_result,
-        "close_result": m.close_result,
-        "final_result": final_result,
-        "status": status
-    }
-
-    return data
+    return serialize_public_market(m)
 
 # ---------------------------
 # GET ALL MARKETS (FULL + CLEAN)
@@ -129,20 +145,13 @@ def get_all_markets():
 
     markets = []
 
-    for m in Market.objects.order_by("open_time"):
-        status = "Market Running" if is_market_running(m.open_time, m.close_time) else "Market Closed"
-        final_result = build_result(m.open_result, m.close_result)
+    query = Market.objects(
+        is_active=True,
+        marketType="Market",
+    ).order_by("open_time")
 
-        markets.append({
-            "id": str(m.id),
-            "name": m.name,
-            "open_time": m.open_time,
-            "close_time": m.close_time,
-            "open_result": m.open_result,
-            "close_result": m.close_result,
-            "final_result": final_result,
-            "status": status
-        })
+    for m in query:
+        markets.append(serialize_public_market(m))
 
     return {"status": "success", "count": len(markets), "markets": markets}
 
@@ -192,16 +201,18 @@ def get_monthly_chart(market_id: str):
     for r in results:
 
         # Extract day name (Mon, Tue…)
-        date_obj = datetime.strptime(r.date, "%Y-%m-%d")
+        date_obj = r.date
+        if not isinstance(date_obj, datetime):
+            date_obj = datetime.fromisoformat(str(date_obj))
         day_name = date_obj.strftime("%a")  # e.g. Wed, Tue
 
         chart.append({
-            "date": r.date,
+            "date": date_obj.strftime("%Y-%m-%d"),
             "day": day_name,
             "open_panna": r.open_panna,
-            "open_digit": last_digit(r.open_panna),
+            "open_digit": r.open_digit or last_digit(r.open_panna),
             "close_panna": r.close_panna,
-            "close_digit": last_digit(r.close_panna)
+            "close_digit": r.close_digit or last_digit(r.close_panna)
         })
 
     return {

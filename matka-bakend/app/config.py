@@ -6,15 +6,20 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "c2f9d8a7b6e54193a8f4c1d9e7b2f5a6d3c8e1f4b9a7d2c6e5f8a1b3d9c7e4f2"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60*24*7
-    CORS_ORIGINS: str = "https://game.natraj777.com,https://api.natraj777.com,http://localhost:5173,http://127.0.0.1:5173"
+    CORS_ORIGINS: str = "https://game.natraj777.com,https://api.natraj777.com,https://natraj777.com,https://www.natraj777.com,http://localhost:5173,http://127.0.0.1:5173"
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [
+        configured = [
             origin.strip().rstrip("/")
             for origin in self.CORS_ORIGINS.split(",")
             if origin.strip()
         ]
+        landing_origins = [
+            "https://natraj777.com",
+            "https://www.natraj777.com",
+        ]
+        return list(dict.fromkeys([*configured, *landing_origins]))
 
     class Config:
         env_file = ".env"
