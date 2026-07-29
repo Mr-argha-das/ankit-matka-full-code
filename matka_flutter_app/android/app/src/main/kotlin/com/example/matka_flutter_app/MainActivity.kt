@@ -2,8 +2,12 @@ package com.example.matka_flutter_app
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -11,6 +15,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channelName = "matka/upi_intent"
     private val externalUrlChannelName = "matka/external_url"
+    private val hapticChannelName = "matka/haptic"
     private val upiRequestCode = 7301
     private var pendingResult: MethodChannel.Result? = null
 
@@ -55,6 +60,38 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            hapticChannelName
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "vibrate" -> {
+                    val duration = call.argument<Number>("duration")
+                        ?.toLong()
+                        ?.coerceIn(200L, 2000L)
+                        ?: 1200L
+                    vibratePhone(duration)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun vibratePhone(duration: Long) {
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(
+                    duration,
+                    VibrationEffect.DEFAULT_AMPLITUDE
+                )
+            )
+        } else {
+            vibrator.vibrate(duration)
         }
     }
 

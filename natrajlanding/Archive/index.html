@@ -418,7 +418,10 @@
     // ============================================================
     //  MARKETS API INTEGRATION
     // ============================================================
-    const API_URL = 'https://api.natraj777.com/market/';
+    const API_ORIGIN = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      ? 'http://127.0.0.1:8000'
+      : 'https://api.natraj777.com';
+    const API_URL = `${API_ORIGIN}/market/`;
     const SITE_DATA_URL = 'https://api.natraj777.com/sitedata/get';
     const CHART_PAGE = 'charts.html';
 

@@ -44,6 +44,7 @@ class MatkaWebView extends StatefulWidget {
 class _MatkaWebViewState extends State<MatkaWebView> {
   static const _upiChannel = MethodChannel('matka/upi_intent');
   static const _externalUrlChannel = MethodChannel('matka/external_url');
+  static const _hapticChannel = MethodChannel('matka/haptic');
 
   late final WebViewController _controller;
   var _progress = 0;
@@ -59,6 +60,10 @@ class _MatkaWebViewState extends State<MatkaWebView> {
       ..addJavaScriptChannel(
         'StartUpiPayment',
         onMessageReceived: _startUpiPayment,
+      )
+      ..addJavaScriptChannel(
+        'HapticFeedback',
+        onMessageReceived: (_) => _vibrateClosedMarket(),
       )
       ..setNavigationDelegate(
         NavigationDelegate(
@@ -85,8 +90,30 @@ class _MatkaWebViewState extends State<MatkaWebView> {
             return NavigationDecision.navigate;
           },
         ),
-      )
-      ..loadRequest(Uri.parse(webAppUrl));
+      );
+
+    _loadWebApp();
+  }
+
+  Future<void> _loadWebApp() async {
+    final initialUri = Uri.parse(webAppUrl).replace(
+      queryParameters: {
+        ...Uri.parse(webAppUrl).queryParameters,
+        'app_build': '3',
+      },
+    );
+    await _controller.loadRequest(initialUri);
+  }
+
+  Future<void> _vibrateClosedMarket() async {
+    try {
+      await _hapticChannel.invokeMethod<void>(
+        'vibrate',
+        {'duration': 1200},
+      );
+    } on PlatformException {
+      await HapticFeedback.heavyImpact();
+    }
   }
 
   bool _shouldOpenExternally(Uri? uri) {
