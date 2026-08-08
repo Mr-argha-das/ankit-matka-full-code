@@ -122,7 +122,7 @@ class _MatkaWebViewState extends State<MatkaWebView> {
     final initialUri = Uri.parse(webAppUrl).replace(
       queryParameters: {
         ...Uri.parse(webAppUrl).queryParameters,
-        'app_build': '3',
+        'app_build': '4',
       },
     );
     await _controller.loadRequest(initialUri);

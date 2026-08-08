@@ -68,11 +68,7 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "vibrate" -> {
-                    val duration = call.argument<Number>("duration")
-                        ?.toLong()
-                        ?.coerceIn(200L, 2000L)
-                        ?: 1200L
-                    vibratePhone(duration)
+                    vibratePhone()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -81,17 +77,21 @@ class MainActivity : FlutterActivity() {
     }
 
     @Suppress("DEPRECATION")
-    private fun vibratePhone(duration: Long) {
+    private fun vibratePhone() {
         val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (!vibrator.hasVibrator()) return
+
+        val timings = longArrayOf(0L, 250L, 100L, 350L, 100L, 500L)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(
-                VibrationEffect.createOneShot(
-                    duration,
-                    VibrationEffect.DEFAULT_AMPLITUDE
+                VibrationEffect.createWaveform(
+                    timings,
+                    intArrayOf(0, 255, 0, 255, 0, 255),
+                    -1
                 )
             )
         } else {
-            vibrator.vibrate(duration)
+            vibrator.vibrate(timings, -1)
         }
     }
 
