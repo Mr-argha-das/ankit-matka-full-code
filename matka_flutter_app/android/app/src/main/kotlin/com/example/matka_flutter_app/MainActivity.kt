@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
     private val hapticChannelName = "matka/haptic"
     private val upiRequestCode = 7301
     private var pendingResult: MethodChannel.Result? = null
+    private var lastVibrationAt = 0L
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -78,6 +79,10 @@ class MainActivity : FlutterActivity() {
 
     @Suppress("DEPRECATION")
     private fun vibratePhone() {
+        val now = System.currentTimeMillis()
+        if (now - lastVibrationAt < 400L) return
+        lastVibrationAt = now
+
         val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         if (!vibrator.hasVibrator()) return
 

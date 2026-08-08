@@ -64,13 +64,14 @@ class _MatkaWebViewState extends State<MatkaWebView> {
         onMessageReceived: _startUpiPayment,
       )
       ..addJavaScriptChannel(
-        'HapticFeedback',
+        'MarketVibration',
         onMessageReceived: (_) => _vibrateClosedMarket(),
       )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) => setState(() => _progress = progress),
           onPageStarted: (_) => setState(() => _hasError = false),
+          onPageFinished: (_) => _installMarketVibrationListener(),
           onWebResourceError: (error) {
             if (error.isForMainFrame == true) {
               setState(() => _hasError = true);
@@ -128,7 +129,24 @@ class _MatkaWebViewState extends State<MatkaWebView> {
     await _controller.loadRequest(initialUri);
   }
 
+  Future<void> _installMarketVibrationListener() async {
+    await _controller.runJavaScript('''
+      if (!window.__marketVibrationInstalled) {
+        window.__marketVibrationInstalled = true;
+        document.addEventListener('click', function (event) {
+          const target = event.target instanceof Element
+            ? event.target.closest('button[data-market-closed="true"], button[title="Market Closed"]')
+            : null;
+          if (target && window.MarketVibration) {
+            window.MarketVibration.postMessage('strong');
+          }
+        }, true);
+      }
+    ''');
+  }
+
   Future<void> _vibrateClosedMarket() async {
+    await HapticFeedback.heavyImpact();
     try {
       await _hapticChannel.invokeMethod<void>(
         'vibrate',
