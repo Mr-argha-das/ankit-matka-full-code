@@ -8,6 +8,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.HapticFeedbackConstants
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -83,7 +85,18 @@ class MainActivity : FlutterActivity() {
         if (now - lastVibrationAt < 400L) return
         lastVibrationAt = now
 
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        window.decorView.performHapticFeedback(
+            HapticFeedbackConstants.LONG_PRESS,
+            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING or
+                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
+        )
+
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            manager.defaultVibrator
+        } else {
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
         if (!vibrator.hasVibrator()) return
 
         val timings = longArrayOf(0L, 250L, 100L, 350L, 100L, 500L)

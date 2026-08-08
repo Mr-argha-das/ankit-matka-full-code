@@ -146,7 +146,6 @@ class _MatkaWebViewState extends State<MatkaWebView> {
   }
 
   Future<void> _vibrateClosedMarket() async {
-    await HapticFeedback.heavyImpact();
     try {
       await _hapticChannel.invokeMethod<void>(
         'vibrate',
