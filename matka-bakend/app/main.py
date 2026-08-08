@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from mongoengine import connect
 from app.config import settings
 import os
+from pathlib import Path
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -134,15 +135,18 @@ def root():
     return {"status": "ok", "message": "Matka backend running"}
 
 
+APK_PATH = Path(__file__).resolve().parent.parent / "static" / "apk" / "Natarj-777.apk"
+
+
 def _app_download_response():
-    apk_path = "static/apk/Natarj-777.apk"
-    if not os.path.exists(apk_path):
+    if not APK_PATH.is_file():
         return JSONResponse(status_code=404, content={"detail": "APK not found"})
 
     return FileResponse(
-        apk_path,
+        APK_PATH,
         media_type="application/vnd.android.package-archive",
         filename="Natarj-777.apk",
+        headers={"Cache-Control": "no-store"},
     )
 
 
