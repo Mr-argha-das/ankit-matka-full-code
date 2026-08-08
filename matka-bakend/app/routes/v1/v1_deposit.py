@@ -17,6 +17,14 @@ router = APIRouter(prefix="/user-deposit-withdrawal", tags=["Deposit Withdrawal"
 UPLOAD_DIR = "uploads/deposit_qr"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024
+
 
 # =====================================================================
 # 1️⃣ USER: Upload Deposit QR
@@ -38,16 +46,25 @@ async def upload_qr(
     if not method:
         raise HTTPException(400, "Method is required")
 
-    # Validate image extension
-    if not image.filename.lower().endswith((".png", ".jpg", ".jpeg")):
-        raise HTTPException(400, "Only PNG/JPG images allowed")
+    # Android content pickers may provide a URI or filename without an
+    # extension, so validate the MIME type instead of relying on the name.
+    content_type = (image.content_type or "").lower()
+    extension = ALLOWED_IMAGE_TYPES.get(content_type)
+    if not extension:
+        raise HTTPException(400, "Only PNG, JPG or WEBP images are allowed")
+
+    image_bytes = await image.read(MAX_IMAGE_SIZE + 1)
+    if not image_bytes:
+        raise HTTPException(400, "Uploaded screenshot is empty")
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        raise HTTPException(413, "Screenshot size must be under 10 MB")
 
     # Save image
-    filename = f"{uuid.uuid4()}.jpg"
+    filename = f"{uuid.uuid4()}{extension}"
     file_path = os.path.join(UPLOAD_DIR, filename)
 
     with open(file_path, "wb") as f:
-        f.write(await image.read())
+        f.write(image_bytes)
 
     # Create deposit request
     qr = DepositQR(

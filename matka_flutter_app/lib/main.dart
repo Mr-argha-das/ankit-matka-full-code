@@ -1,8 +1,10 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 const webAppUrl = String.fromEnvironment(
   'WEB_APP_URL',
@@ -92,7 +94,28 @@ class _MatkaWebViewState extends State<MatkaWebView> {
         ),
       );
 
+    final platformController = _controller.platform;
+    if (platformController is AndroidWebViewController) {
+      platformController.setOnShowFileSelector(_selectFiles);
+    }
+
     _loadWebApp();
+  }
+
+  Future<List<String>> _selectFiles(FileSelectorParams params) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: params.mode == FileSelectorMode.openMultiple,
+      withData: false,
+    );
+
+    if (result == null) return const <String>[];
+
+    return result.files
+        .map((file) => file.path)
+        .whereType<String>()
+        .map((path) => Uri.file(path).toString())
+        .toList();
   }
 
   Future<void> _loadWebApp() async {
